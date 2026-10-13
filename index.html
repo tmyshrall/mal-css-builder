@@ -333,8 +333,9 @@ const SCHEMA = [
     ["curUrl","text","Cursor image URL (any image, any size)",""],
     ["curLink","text","Cursor over links (optional, any image)",""],
     ["curSize","range","Cursor size (px, 0 = original size, max 128)",0,128,1,32],
-    ["curHx","range","Click point from left (px)",0,64,1,0],
-    ["curHy","range","Click point from top (px)",0,64,1,0] ]},
+    ["curHot","select","Click point (Center, or Top left to use the sliders below)",["Top left","Center"],"Top left"],
+    ["curHx","range","Click point from left (px)",0,128,1,0],
+    ["curHy","range","Click point from top (px)",0,128,1,0] ]},
   { g: "Animation", i: [
     ["fade","check","Panel fade-in on load",true],
     ["pulse","check","Pulsing glow",true],
@@ -368,6 +369,9 @@ const gfont = f => `@import url('https://fonts.googleapis.com/css2?family=${f.re
 const palette = s => s.pal === "Accent shades" ? Array.from({ length: 10 }, (_, i) => mix(s.acc, i * 0.06)) : (PALETTES[s.pal] || PALETTES["Green to red"]);
 
 /* s = settings object, o = preview overrides (body selector, positioning) */
+/* resized cursor images (data: URLs), filled in by the browser part */
+const CURSOR_CACHE = {}, CURSOR_DIM = {};
+
 function build(s, o) {
   o = o || {};
   const B = o.body || "body", pos = o.pos || "fixed", att = o.att || "fixed";
@@ -562,15 +566,23 @@ function build(s, o) {
   if (s.sel) ex.push(`${root}::selection {\n  background: rgba(${A},.55);\n  color: #fff;\n}`);
   if (s.curUrl || s.curLink) {
     const hot = `${s.curHx} ${s.curHy}`;
-    /* resize through wsrv.nl so any image (jpg, webp, big png...) becomes a small png cursor */
-    const cu = u => (s.curSize > 0 && !/^data:/i.test(u))
-      ? "https://wsrv.nl/?url=" + encodeURIComponent(u) + "&w=" + s.curSize + "&h=" + s.curSize + "&fit=contain&output=png&filename=cursor.png"
-      : u;
-    const base = s.curUrl ? `url("${uq(cu(s.curUrl))}") ${hot}, auto` : "";
-    const lnk = `url("${uq(cu(s.curLink || s.curUrl))}") ${hot}, pointer`;
+    /* the browser resizes the image to a small png and embeds it as a data: URL (see ensureCursors),
+       so MAL never has to load anything from a third-party host */
+    const cu = u => (s.curSize > 0 && CURSOR_CACHE[u + "|" + s.curSize]) || u;
+    const val = (u, kw) => {
+      const ctr = s.curHot === "Center";
+      /* resized in the browser: the click point has to stay inside the resized image */
+      const d = s.curSize > 0 ? CURSOR_DIM[u + "|" + s.curSize] : null;
+      let hx = s.curHx, hy = s.curHy;
+      if (d) { hx = ctr ? Math.round(d[0] / 2) : Math.min(hx, d[0] - 1); hy = ctr ? Math.round(d[1] / 2) : Math.min(hy, d[1] - 1); }
+      return `url("${uq(cu(u))}") ${hx} ${hy}, ${kw}`;
+    };
+    const base = s.curUrl ? val(s.curUrl, "auto") : "";
+    const lnk = val(s.curLink || s.curUrl, "pointer");
     const pre = o.body ? o.body + " " : "";
-    if (base) ex.push(`${o.body || "html, body"} {\n  cursor: ${base};\n}`);
-    ex.push(`${pre}a, ${pre}a:hover, ${pre}button, ${pre}select, ${pre}.link, ${pre}.status-button {\n  cursor: ${lnk};\n}`);
+    if (base) ex.push(`${o.body || "html, body"} {\n  cursor: ${base} !important;\n}`);
+    if (base) ex.push(`${pre}* {\n  cursor: ${base} !important;\n}`);
+    ex.push(`${pre}a, ${pre}a:hover, ${pre}button, ${pre}select, ${pre}.link, ${pre}.status-button, ${pre}a * {\n  cursor: ${lnk} !important;\n}`);
   }
   if (ex.length) c.push("/* ===== EXTRAS ===== */", ...ex);
 
@@ -975,6 +987,7 @@ if (typeof document !== "undefined") {
     const ps = state;
     $("gen").textContent = build(ps, { body: ".stage", pos: "absolute", att: "scroll" });
     fit();
+    ensureCursors(); curNote();
     $("stage").style.backgroundImage = uploaded ? `url("${uploaded}")` : "";
     $("stage").classList.toggle("has-bg", !!(uploaded || state.bg));
   }
@@ -990,7 +1003,7 @@ if (typeof document !== "undefined") {
       else if (t === "check") out[k] = v === true || v === "true";
       else if (t === "color") { if (/^#[0-9a-f]{6}$/i.test(v)) out[k] = String(v).toLowerCase(); }
       else if (t === "select") { if (it[3].indexOf(v) > -1) out[k] = v; }
-      else if (t === "text") out[k] = String(v).replace(/[\r\n\\]/g, "").slice(0, 2000);
+      else if (t === "text") out[k] = String(v).replace(/[\r\n\\]/g, "").slice(0, /^data:/i.test(String(v)) ? 300000 : 2000);
     });
     return out;
   }
@@ -1085,10 +1098,66 @@ if (typeof document !== "undefined") {
     setState({}, true);
   });
 
+  /* ----- cursor: resize any image in the browser and embed it ----- */
+  const CURSOR_FAIL = {}, pendingCur = {};
+  const isData = u => /^data:/i.test(u);
+  const loadImg = (src, cors) => new Promise((res, rej) => {
+    const im = new Image(); if (cors) im.crossOrigin = "anonymous";
+    im.onload = () => res(im); im.onerror = rej; im.src = src;
+  });
+  async function makeCursor(u, size) {
+    /* try the image directly; if its host blocks canvas access, read it through a CORS-friendly proxy (only inside this page) */
+    const tries = isData(u) ? [u] : [u, "https://wsrv.nl/?url=" + encodeURIComponent(u) + "&w=512&h=512&fit=inside&output=png"];
+    for (const src of tries) {
+      try {
+        const im = await loadImg(src, !isData(src));
+        const k = size / Math.max(im.naturalWidth, im.naturalHeight);
+        const c = document.createElement("canvas");
+        c.width = Math.max(1, Math.round(im.naturalWidth * k));
+        c.height = Math.max(1, Math.round(im.naturalHeight * k));
+        const g = c.getContext("2d"); g.imageSmoothingQuality = "high";
+        g.drawImage(im, 0, 0, c.width, c.height);
+        return { uri: c.toDataURL("image/png"), w: c.width, h: c.height };
+      } catch (e) { /* try next */ }
+    }
+    return null;
+  }
+  let curTimer = 0;
+  function ensureCursors() {
+    clearTimeout(curTimer);
+    curTimer = setTimeout(() => {
+      if (!(state.curSize > 0)) return;
+      [state.curUrl, state.curLink].forEach(u => {
+        if (!u) return;
+        const k = u + "|" + state.curSize;
+        if (CURSOR_CACHE[k] || CURSOR_FAIL[k] || pendingCur[k]) return;
+        pendingCur[k] = true; curNote();
+        makeCursor(u, state.curSize).then(r => {
+          delete pendingCur[k];
+          if (r) { CURSOR_CACHE[k] = r.uri; CURSOR_DIM[k] = [r.w, r.h]; } else CURSOR_FAIL[k] = 1;
+          refresh();
+        });
+      });
+    }, 400);
+  }
+  function curNote() {
+    const el = $("curNote"); if (!el) return;
+    const urls = [state.curUrl, state.curLink].filter(Boolean);
+    if (!urls.length) { el.textContent = ""; return; }
+    const keys = urls.map(u => u + "|" + state.curSize);
+    if (!(state.curSize > 0)) { el.textContent = "Size is 0, so your image is used as-is. Browsers ignore cursor images bigger than 128px, so raise the size to resize it."; return; }
+    if (keys.some(k => pendingCur[k])) { el.textContent = "Resizing…"; return; }
+    if (keys.some(k => CURSOR_FAIL[k])) { el.textContent = "Couldn't read that image. Try a different link."; return; }
+    const kb = Math.max(1, Math.round(keys.reduce((a, k) => a + (CURSOR_CACHE[k] || "").length, 0) / 1024));
+    el.textContent = "Done. The resized cursor is embedded in the CSS (about " + kb + " KB), so it needs no outside host.";
+  }
+  { const note = document.createElement("div"); note.className = "ctl"; note.id = "curNote";
+    $("i_curUrl").closest(".gbody").appendChild(note); }
+
   refresh();
 }
 
-if (typeof module !== "undefined") module.exports = { build, SCHEMA, parseCss, PALETTES };
+if (typeof module !== "undefined") module.exports = { build, SCHEMA, parseCss, PALETTES, CURSOR_CACHE, CURSOR_DIM };
   </script>
 </body>
 </html>

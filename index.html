@@ -91,7 +91,11 @@ pre { margin: 0; max-height: 420px; overflow: auto; background: var(--card); bor
 .stage .list-table td { padding: 7px 6px; text-align: center; vertical-align: middle; }
 .stage .list-table td.title { text-align: left; font-weight: 600; }
 .stage .list-table td.status { width: 4px; padding: 0; }
-.stage .list-table td.status.completed { background: #2e51a2; }
+.stage .list-table td.status.watching { background: #2db039; }
+.stage .list-table td.status.completed { background: #26448f; }
+.stage .list-table td.status.onhold { background: #f9d457; }
+.stage .list-table td.status.dropped { background: #a12f31; }
+.stage .list-table td.status.plantowatch { background: #c3c3c3; }
 .stage .list-table td.title .title-wrap { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .stage .list-table-header td { font-size: 12px; font-weight: 700; }
 .stage .list-table-header td.title { text-align: left; }
@@ -136,16 +140,16 @@ pre { margin: 0; max-height: 420px; overflow: auto; background: var(--card); bor
         <div class="side-l"></div><div class="side-r"></div>
         <div class="status-menu-container">
           <div class="status-menu">
-            <a class="status-button">All Anime</a>
+            <a class="status-button on">All Anime</a>
             <a class="status-button">Currently Watching</a>
-            <a class="status-button on">Completed</a>
+            <a class="status-button">Completed</a>
             <a class="status-button">On Hold</a>
             <a class="status-button">Dropped</a>
           </div>
         </div>
         <div class="list-block">
           <div class="list-unit">
-            <div class="list-status-title"><span class="text">COMPLETED</span></div>
+            <div class="list-status-title"><span class="text">ALL ANIME</span></div>
             <table class="list-table" id="table"></table>
           </div>
         </div>
@@ -249,7 +253,8 @@ const SCHEMA = [
     ["focus","check","Dim other rows on hover",false],
     ["swi","range","Glint sweep brightness",0.02,0.3,0.01,0.07],
     ["sbar","check","Custom status bar (left edge)",false],
-    ["sbc","color","Status bar color","#2e51a2"],
+    ["sbcu","check","Use one color for every status (off = keep MAL's own colors)",false],
+    ["sbc","color","Status bar color (when one color is on)","#2e51a2"],
     ["sbw","range","Status bar width (px)",2,14,1,4],
     ["sbg","range","Status bar glow (px)",0,24,1,0],
     ["sticky","check","Sticky column headers",false],
@@ -330,6 +335,8 @@ const SCHEMA = [
     ["sel","check","Accent text selection",false] ]}
 ];
 
+/* MAL's own status bar colors, used when the glow keeps the default colors */
+const STATUS_COLORS = [["watching","#2db039"],["completed","#26448f"],["onhold","#f9d457"],["dropped","#a12f31"],["plantowatch","#c3c3c3"]];
 const hx = h => [1,3,5].map(i => parseInt(h.substr(i,2),16)).join(",");
 const n = x => +(+x).toFixed(2);
 const mix = (h,p) => "#" + [1,3,5].map(i => { const v = parseInt(h.substr(i,2),16); return Math.round(v + (255 - v) * p).toString(16).padStart(2,"0"); }).join("");
@@ -444,7 +451,11 @@ function build(s, o) {
     c.push(`${sel([9,10])} {\n  background-color: rgba(63,207,95,${t}) !important;\n}\n${sel([1,2,3,4])} {\n  background-color: rgba(255,59,48,${t}) !important;\n}`);
   }
   if (s.focus) c.push(`.list-table:hover tbody:not(:hover) {\n  opacity: .55;\n}`);
-  if (s.sbar) c.push(`.list-table .list-table-data .data.status {\n  background-color: ${s.sbc} !important;\n  border-left-color: ${s.sbc} !important;\n  width: ${s.sbw}px !important;\n  min-width: ${s.sbw}px;\n  padding: 0 !important;${s.sbg > 0 ? `\n  box-shadow: 0 0 ${s.sbg}px ${s.sbc};` : ""}\n}`);
+  if (s.sbar) {
+    const glow = s.sbg > 0;
+    c.push(`.list-table .list-table-data .data.status {${s.sbcu ? `\n  background-color: ${s.sbc} !important;\n  border-left-color: ${s.sbc} !important;` : ""}\n  width: ${s.sbw}px !important;\n  min-width: ${s.sbw}px;\n  padding: 0 !important;${glow ? "\n  position: relative;\n  z-index: 2;" : ""}${glow && s.sbcu ? `\n  box-shadow: 0 0 ${s.sbg}px ${s.sbc};` : ""}\n}`);
+    if (glow && !s.sbcu) c.push(STATUS_COLORS.map(([k, col]) => `.list-table .list-table-data .data.status.${k} {\n  box-shadow: 0 0 ${s.sbg}px ${col};\n}`).join("\n"));
+  }
   const hbgCol = s.hbg ? `rgba(${hx(s.hbgc)},${n(s.hbgo)})` : (s.sticky ? `rgba(${P},.92)` : "");
   if (s.sticky || hbgCol) c.push(`.list-table .list-table-header .header-title {${hbgCol ? `\n  background-color: ${hbgCol} !important;` : ""}${s.sticky ? "\n  position: sticky;\n  top: 0;\n  z-index: 6;" : ""}\n}`);
   if (s.hdiv) c.push(`.list-table .list-table-header .header-title:not(.status) ~ .header-title {\n  border-left: 1px solid rgba(255,255,255,${n(s.hdv)}) !important;\n}`);
@@ -713,11 +724,14 @@ function parseCss(text) {
   if (tr) { const c = colors(tr.decls["background-color"])[0]; if (c) o.tinta = c.a; }
   o.focus = !!first(".list-table:hover tbody:not(:hover)");
   const sb = first(".list-table .list-table-data .data.status");
-  o.sbar = !!sb;
+  o.sbar = !!sb; o.sbcu = false; o.sbg = 0;
   if (sb) {
-    if (isHex(sb.decls["background-color"])) o.sbc = sb.decls["background-color"].toLowerCase();
+    o.sbcu = isHex(sb.decls["background-color"]);
+    if (o.sbcu) o.sbc = sb.decls["background-color"].toLowerCase();
     const w = px(sb.decls.width); if (w !== null) o.sbw = w;
-    const sgm = /0 0 ([\d.]+)px/.exec(sb.decls["box-shadow"] || ""); o.sbg = sgm ? +sgm[1] : 0;
+    let bsh = sb.decls["box-shadow"] || "";
+    if (!bsh) { const sr2 = rules.find(r => /^\.list-table \.list-table-data \.data\.status\.\w+$/.test(r.sel) && r.decls["box-shadow"]); if (sr2) bsh = sr2.decls["box-shadow"]; }
+    const sgm = /0 0 ([\d.]+)px/.exec(bsh); o.sbg = sgm ? +sgm[1] : 0;
   }
   const HDR = ".list-table .list-table-header .header-title";
   const hr = all(HDR).find(r => r.decls["background-color"] || r.decls.position);
@@ -928,10 +942,11 @@ if (typeof document !== "undefined") {
   /* ----- sample list ----- */
   const covers = [["#7a2b1f","#1b1b1b"],["#1a1a1a","#8a5a3a"],["#d98ab0","#3a2a7a"],["#2b4a73","#c9d3e6"],["#2a7a3a","#d9a321"],["#3b2a7a","#c43a3a"],["#1f6f8b","#99e2b4"],["#8a1c1c","#2b2b2b"],["#e0a030","#5a2a7a"]];
   const art = c => "data:image/svg+xml," + encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='76' height='108'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='${c[0]}'/><stop offset='1' stop-color='${c[1]}'/></linearGradient></defs><rect width='76' height='108' fill='url(#g)'/></svg>`);
+  const ST = ["watching","completed","completed","onhold","dropped","plantowatch","completed","watching","completed"];
   const rows = [["Cowboy Bebop",10,"TV","26","Spring 1998","8.75"],["Grave of the Fireflies",10,"Movie","1","Spring 1988","8.46"],["Clannad: After Story",9,"TV","24","Fall 2008","8.91"],["Steins;Gate",8,"TV","24","Spring 2011","9.07"],["Hunter x Hunter",7,"TV","148","Fall 2011","9.03"],["Made in Abyss",4,"TV","13","Summer 2017","8.71"],["Fullmetal Alchemist: Brotherhood",9,"TV","64","Spring 2009","9.10"],["Death Note",8,"TV","37","Fall 2006","8.62"],["Mob Psycho 100",9,"TV","12","Summer 2016","8.48"]];
   $("table").innerHTML =
     `<thead><tr class="list-table-header"><td class="header-title status"></td><td class="header-title number"><a class="link">#</a></td><td class="header-title image"><a class="link sort">Image</a></td><td class="header-title title"><a class="link sort">Anime Title</a></td><td class="header-title score"><a class="link sort">Score</a></td><td class="header-title type"><a class="link sort">Type</a></td><td class="header-title progress"><a class="link sort">Progress</a></td><td class="header-title release"><a class="link sort">Premiered</a></td><td class="header-title mal"><a class="link sort">MAL Score</a></td></tr></thead>` +
-    rows.map((r, i) => `<tbody class="list-item"><tr class="list-table-data"><td class="data status completed"></td><td class="data number">${i+1}</td><td class="data image"><a><img src="${art(covers[i])}" alt=""></a></td><td class="data title"><div class="title-wrap"><a class="link">${r[0]}</a><span class="edit">Edit - More</span></div></td><td class="data score"><span class="score-label score-${r[1]}">${r[1]}</span></td><td class="data type">${r[2]}</td><td class="data progress">${r[3]}</td><td class="data release">${r[4]}</td><td class="data mal">${r[5]}</td></tr></tbody>`).join("");
+    rows.map((r, i) => `<tbody class="list-item"><tr class="list-table-data"><td class="data status ${ST[i % ST.length]}"></td><td class="data number">${i+1}</td><td class="data image"><a><img src="${art(covers[i])}" alt=""></a></td><td class="data title"><div class="title-wrap"><a class="link">${r[0]}</a><span class="edit">Edit - More</span></div></td><td class="data score"><span class="score-label score-${r[1]}">${r[1]}</span></td><td class="data type">${r[2]}</td><td class="data progress">${r[3]}</td><td class="data release">${r[4]}</td><td class="data mal">${r[5]}</td></tr></tbody>`).join("");
 
   /* ----- buttons ----- */
   function copyText(txt, b, label) {

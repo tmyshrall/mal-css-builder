@@ -330,8 +330,9 @@ const SCHEMA = [
     ["cnBob","check","Gentle floating motion",false],
     ["cnBp","range","Float period (s)",2,12,0.5,4] ]},
   { g: "Cursor", i: [
-    ["curUrl","text","Cursor image URL (png, 128px or smaller)",""],
-    ["curLink","text","Cursor over links (optional, png)",""],
+    ["curUrl","text","Cursor image URL (any image, any size)",""],
+    ["curLink","text","Cursor over links (optional, any image)",""],
+    ["curSize","range","Cursor size (px, 0 = original size, max 128)",0,128,1,32],
     ["curHx","range","Click point from left (px)",0,64,1,0],
     ["curHy","range","Click point from top (px)",0,64,1,0] ]},
   { g: "Animation", i: [
@@ -561,8 +562,12 @@ function build(s, o) {
   if (s.sel) ex.push(`${root}::selection {\n  background: rgba(${A},.55);\n  color: #fff;\n}`);
   if (s.curUrl || s.curLink) {
     const hot = `${s.curHx} ${s.curHy}`;
-    const base = s.curUrl ? `url("${uq(s.curUrl)}") ${hot}, auto` : "";
-    const lnk = `url("${uq(s.curLink || s.curUrl)}") ${hot}, pointer`;
+    /* resize through wsrv.nl so any image (jpg, webp, big png...) becomes a small png cursor */
+    const cu = u => (s.curSize > 0 && !/^data:/i.test(u))
+      ? "https://wsrv.nl/?url=" + encodeURIComponent(u) + "&w=" + s.curSize + "&h=" + s.curSize + "&fit=contain&output=png&filename=cursor.png"
+      : u;
+    const base = s.curUrl ? `url("${uq(cu(s.curUrl))}") ${hot}, auto` : "";
+    const lnk = `url("${uq(cu(s.curLink || s.curUrl))}") ${hot}, pointer`;
     const pre = o.body ? o.body + " " : "";
     if (base) ex.push(`${o.body || "html, body"} {\n  cursor: ${base};\n}`);
     ex.push(`${pre}a, ${pre}a:hover, ${pre}button, ${pre}select, ${pre}.link, ${pre}.status-button {\n  cursor: ${lnk};\n}`);
@@ -922,8 +927,11 @@ function parseCss(text) {
   const curRe = /url\("((?:[^"\\]|\\.)*)"\)\s+(\d+)\s+(\d+)/;
   const cb0 = first("html,body"), cl0 = rules.find(r => /^a,a:hover,/.test(r.sel) && r.decls.cursor);
   const cm0 = cb0 && curRe.exec(cb0.decls.cursor || ""), cm1 = cl0 && curRe.exec(cl0.decls.cursor || "");
-  if (cm0) { o.curUrl = cm0[1]; o.curHx = +cm0[2]; o.curHy = +cm0[3]; }
-  if (cm1) { if (!cm0 || cm1[1] !== cm0[1]) o.curLink = cm1[1]; if (!cm0) { o.curHx = +cm1[2]; o.curHy = +cm1[3]; } }
+  const curBack = u => { const m = /^https:\/\/wsrv\.nl\/\?url=([^&]*)&w=(\d+)&h=\d+&fit=contain&output=png&filename=cursor\.png$/.exec(u); return m ? { url: decodeURIComponent(m[1]), size: +m[2] } : { url: u, size: 0 }; };
+  o.curSize = 0;
+  const b0 = cm0 ? curBack(cm0[1]) : null, b1 = cm1 ? curBack(cm1[1]) : null;
+  if (cm0) { o.curUrl = b0.url; o.curSize = b0.size; o.curHx = +cm0[2]; o.curHy = +cm0[3]; }
+  if (cm1) { if (!cm0 || b1.url !== b0.url) o.curLink = b1.url; if (!cm0) { o.curSize = b1.size; o.curHx = +cm1[2]; o.curHy = +cm1[3]; } }
 
   /* ----- extras ----- */
   const sbr = first("html");

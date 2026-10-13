@@ -243,7 +243,8 @@ const SCHEMA = [
     ["cbc","color","Cover border color","#ffffff"],
     ["cbw","range","Cover border width (px)",1,5,1,2],
     ["gray","check","Black & white covers (color on hover)",false],
-    ["cbr","range","Cover brightness",0.5,1.5,0.05,1] ]},
+    ["cbr","range","Cover brightness",0.5,1.5,0.05,1],
+    ["cshape","select","Cover shape",["Rounded rectangle","Circle","Hexagon","Diamond","Slanted"],"Rounded rectangle"] ]},
   { g: "Rows: extras", i: [
     ["rp","range","Row padding (px, 0 = default)",0,20,1,0],
     ["zebra","check","Zebra-striped rows",false],
@@ -282,7 +283,9 @@ const SCHEMA = [
     ["scores","check","Colored scores",true],
     ["glow10","check","Glowing 10s",true],
     ["sglow","check","Glow on all scores",false],
-    ["spill","check","Score pills",false] ]},
+    ["spill","check","Score pills",false],
+    ["sstar","select","Stars after each score (10 = 5 stars)",["Off","Filled stars","Filled + empty stars"],"Off"],
+    ["sstc","color","Star color","#ffd60a"] ]},
   { g: "Hide columns", i: [
     ["hNum","check","Hide # column",false],
     ["hImg","check","Hide cover images",false],
@@ -312,6 +315,25 @@ const SCHEMA = [
     ["sop","range","Image opacity",0.1,1,0.01,1],
     ["sfade","range","Image shadow glow",0,1,0.01,0],
     ["shide","check","Hide on narrow screens (under 1200px)",true] ]},
+  { g: "Banner & corner image", i: [
+    ["bnUrl","text","Banner image URL (png, jpg or gif)",""],
+    ["bnPos","select","Banner goes on top of",["List panel","Tabs panel"],"List panel"],
+    ["bnH","range","Banner height (px)",40,400,5,140],
+    ["bnFit","select","Banner fit",["cover","contain"],"cover"],
+    ["bnVp","select","Banner focus",["center","top","bottom"],"center"],
+    ["bnOp","range","Banner opacity",0.1,1,0.01,1],
+    ["cnUrl","text","Corner image URL (png, jpg or gif)",""],
+    ["cnPos","select","Corner",["Top right","Top left","Bottom right","Bottom left"],"Top right"],
+    ["cnW","range","Corner image size (px)",40,500,5,160],
+    ["cnX","range","Move sideways (px, negative = hang outside)",-300,100,5,-40],
+    ["cnY","range","Move up/down (px, negative = hang outside)",-300,100,5,-60],
+    ["cnBob","check","Gentle floating motion",false],
+    ["cnBp","range","Float period (s)",2,12,0.5,4] ]},
+  { g: "Cursor", i: [
+    ["curUrl","text","Cursor image URL (png, 128px or smaller)",""],
+    ["curLink","text","Cursor over links (optional, png)",""],
+    ["curHx","range","Click point from left (px)",0,64,1,0],
+    ["curHy","range","Click point from top (px)",0,64,1,0] ]},
   { g: "Animation", i: [
     ["fade","check","Panel fade-in on load",true],
     ["pulse","check","Pulsing glow",true],
@@ -476,6 +498,21 @@ function build(s, o) {
     c.push(`.list-table tbody:hover .list-table-data .data.image img {\n  filter: ${fHover};\n}`);
   }
 
+  /* ---------- COVER SHAPE ---------- */
+  if (s.cshape !== "Rounded rectangle") {
+    c.push("/* ===== COVER SHAPE ===== */");
+    const N = s.csz > 0 ? s.csz : ({ Circle: 52, Hexagon: 60, Diamond: 64 }[s.cshape] || 0);
+    const sq = N ? `\n  width: ${N}px !important;\n  height: ${N}px !important;` : "";
+    const shapeCss = {
+      "Circle": "  border-radius: 50%;",
+      "Hexagon": "  clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);\n  border-radius: 0;",
+      "Diamond": "  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);\n  border-radius: 0;",
+      "Slanted": "  clip-path: polygon(14% 0%, 100% 0%, 86% 100%, 0% 100%);\n  border-radius: 0;"
+    }[s.cshape];
+    c.push(`.list-table .list-table-data .data.image img {\n${shapeCss}\n  object-fit: cover;\n  box-shadow: none;${sq}\n}`);
+    c.push(`.list-table .list-table-data .data.image a {\n  display: block;\n  text-align: center;\n  filter: drop-shadow(0 6px 8px rgba(0,0,0,${n(s.cs)}))${s.cglow > 0 ? ` drop-shadow(0 0 12px rgba(${A},${n(s.cglow)}))` : ""};\n}`);
+  }
+
   /* ---------- SCORES ---------- */
   if (s.scores || s.glow10 || s.spill || s.sglow || s.ssz > 0) {
     c.push("/* ===== SCORES ===== */");
@@ -485,6 +522,30 @@ function build(s, o) {
     if (s.glow10) c.push(`.score-label.score-10 { text-shadow: 0 0 8px rgba(${hx(pal[9])},.9); font-weight: 600; }`);
     if (s.spill) c.push(".score-label {\n  border-radius: 12px;\n  padding: 2px 9px;\n  background: rgba(0,0,0,.35);\n  font-weight: 600;\n}");
     if (s.ssz > 0) c.push(`.score-label {\n  font-size: ${s.ssz}px !important;\n}`);
+  }
+
+  /* ---------- STAR SCORES ---------- */
+  if (s.sstar !== "Off") {
+    c.push("/* ===== STAR SCORES ===== */");
+    const full = s.sstar === "Filled + empty stars";
+    const row = [];
+    for (let i = 1; i <= 10; i++) {
+      const k = Math.round(i / 2);
+      row.push(`.score-label.score-${i}::after { content: "${"\\2605".repeat(k)}${full ? "\\2606".repeat(5 - k) : ""}"; }`);
+    }
+    c.push(`.score-label::after {\n  color: ${s.sstc};\n  font-size: .8em;\n  margin-left: 5px;\n  letter-spacing: 1px;\n  font-weight: 400;\n  text-shadow: none;\n}\n${row.join("\n")}`);
+  }
+
+  /* ---------- BANNER & CORNER IMAGE ---------- */
+  if (s.bnUrl) {
+    c.push("/* ===== BANNER ===== */");
+    const bsel = s.bnPos === "Tabs panel" ? ".status-menu-container::before" : ".list-block::before";
+    c.push(`${bsel} {\n  content: "";\n  display: block;\n  height: ${s.bnH}px;\n  background: url("${uq(s.bnUrl)}") center ${s.bnVp} / ${s.bnFit} no-repeat;\n  opacity: ${n(s.bnOp)};\n  border-radius: ${s.rad}px ${s.rad}px 0 0;\n  margin-bottom: 10px;\n}`);
+  }
+  if (s.cnUrl) {
+    c.push("/* ===== CORNER IMAGE ===== */");
+    const vert = s.cnPos.indexOf("Top") === 0 ? "top" : "bottom", horiz = /right/i.test(s.cnPos) ? "right" : "left";
+    c.push(`.list-block {\n  position: relative;\n}\n.list-block::after {\n  content: "";\n  position: absolute;\n  ${vert}: ${s.cnY}px;\n  ${horiz}: ${s.cnX}px;\n  width: ${s.cnW}px;\n  height: ${s.cnW}px;\n  background: url("${uq(s.cnUrl)}") center / contain no-repeat;\n  pointer-events: none;\n  z-index: 8;${s.cnBob ? `\n  animation: cornerBob ${n(s.cnBp)}s ease-in-out infinite;` : ""}\n}${s.cnBob ? "\n@keyframes cornerBob {\n  0%, 100% { transform: translateY(0); }\n  50% { transform: translateY(-10px); }\n}" : ""}`);
   }
 
   /* ---------- HIDDEN COLUMNS ---------- */
@@ -498,6 +559,14 @@ function build(s, o) {
   const ex = [];
   if (s.scroll) ex.push(`${o.body || "html"} {\n  scrollbar-color: ${s.acc} rgba(0,0,0,.25);\n}\n${o.body || ""}::-webkit-scrollbar { width: 10px; }\n${o.body || ""}::-webkit-scrollbar-track { background: rgba(0,0,0,.25); }\n${o.body || ""}::-webkit-scrollbar-thumb {\n  background: rgba(${A},.6);\n  border-radius: 10px;\n}\n${o.body || ""}::-webkit-scrollbar-thumb:hover { background: ${s.acc}; }`);
   if (s.sel) ex.push(`${root}::selection {\n  background: rgba(${A},.55);\n  color: #fff;\n}`);
+  if (s.curUrl || s.curLink) {
+    const hot = `${s.curHx} ${s.curHy}`;
+    const base = s.curUrl ? `url("${uq(s.curUrl)}") ${hot}, auto` : "";
+    const lnk = `url("${uq(s.curLink || s.curUrl)}") ${hot}, pointer`;
+    const pre = o.body ? o.body + " " : "";
+    if (base) ex.push(`${o.body || "html, body"} {\n  cursor: ${base};\n}`);
+    ex.push(`${pre}a, ${pre}a:hover, ${pre}button, ${pre}select, ${pre}.link, ${pre}.status-button {\n  cursor: ${lnk};\n}`);
+  }
   if (ex.length) c.push("/* ===== EXTRAS ===== */", ...ex);
 
   return c.join("\n\n") + "\n";
@@ -817,6 +886,44 @@ function parseCss(text) {
     if (/\.data\.mal,/.test(s)) o.hMal = true;
     if (/\.data\.title \.edit,/.test(s)) o.hEdit = true;
   });
+
+  /* ----- cover shape, stars, banner, corner, cursor ----- */
+  o.cshape = "Rounded rectangle";
+  all(".list-table .list-table-data .data.image img").forEach(r => {
+    const cp = r.decls["clip-path"] || "";
+    if (/polygon\(\s*25%/.test(cp)) o.cshape = "Hexagon";
+    else if (/polygon\(\s*50% 0%/.test(cp)) o.cshape = "Diamond";
+    else if (/polygon\(\s*14%/.test(cp)) o.cshape = "Slanted";
+    else if ((r.decls["border-radius"] || "").trim() === "50%") o.cshape = "Circle";
+  });
+  const stR = first(".score-label::after");
+  const stC = rules.filter(r => /^\.score-label\.score-\d+::after$/.test(r.sel));
+  o.sstar = "Off";
+  if (stR && stC.length) { o.sstar = stC.some(r => /2606/.test(r.decls.content || "")) ? "Filled + empty stars" : "Filled stars"; if (isHex(stR.decls.color)) o.sstc = stR.decls.color.toLowerCase(); }
+  o.bnUrl = ""; o.cnUrl = "";
+  const bnL = first(".list-block::before"), bnT = first(".status-menu-container::before");
+  const bnR = [bnL, bnT].find(r => r && sideRe.test(r.decls.background || ""));
+  if (bnR) {
+    const m = sideRe.exec(bnR.decls.background);
+    o.bnUrl = m[1]; o.bnVp = m[2]; o.bnFit = m[3]; o.bnPos = bnR === bnT ? "Tabs panel" : "List panel";
+    const h = px(bnR.decls.height); if (h !== null) o.bnH = h;
+    const bo = parseFloat(bnR.decls.opacity); if (isFinite(bo)) o.bnOp = bo;
+  }
+  const cnR = first(".list-block::after");
+  if (cnR && /url\(/.test(cnR.decls.background || "")) {
+    const m = /url\("((?:[^"\\]|\\.)*)"\)/.exec(cnR.decls.background); if (m) o.cnUrl = m[1];
+    const d = cnR.decls, vert = d.top !== undefined ? "Top" : "Bottom", horiz = d.right !== undefined ? "right" : "left";
+    o.cnPos = vert + " " + horiz;
+    const y = px(d.top !== undefined ? d.top : d.bottom), x = px(d.right !== undefined ? d.right : d.left), w = px(d.width);
+    if (y !== null) o.cnY = y; if (x !== null) o.cnX = x; if (w !== null) o.cnW = w;
+    const bm = /cornerBob\s+([\d.]+)s/.exec(d.animation || ""); o.cnBob = !!bm; if (bm) o.cnBp = +bm[1];
+  } else o.cnBob = false;
+  o.curUrl = ""; o.curLink = "";
+  const curRe = /url\("((?:[^"\\]|\\.)*)"\)\s+(\d+)\s+(\d+)/;
+  const cb0 = first("html,body"), cl0 = rules.find(r => /^a,a:hover,/.test(r.sel) && r.decls.cursor);
+  const cm0 = cb0 && curRe.exec(cb0.decls.cursor || ""), cm1 = cl0 && curRe.exec(cl0.decls.cursor || "");
+  if (cm0) { o.curUrl = cm0[1]; o.curHx = +cm0[2]; o.curHy = +cm0[3]; }
+  if (cm1) { if (!cm0 || cm1[1] !== cm0[1]) o.curLink = cm1[1]; if (!cm0) { o.curHx = +cm1[2]; o.curHy = +cm1[3]; } }
 
   /* ----- extras ----- */
   const sbr = first("html");

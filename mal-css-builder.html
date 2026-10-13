@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MAL CSS Builder</title>
+  <style>
+/* ===== Builder UI: cream, minimal ===== */
+:root {
+  --bg: #faf6ee; --card: #fffdf8; --line: #e8e1d2;
+  --text: #2b2a27; --dim: #8c867b; --accent: #2f8f85; --ink: #2b2a27;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
+.site-head, main { max-width: 1900px; margin: 0 auto; padding: 0 20px; }
+.site-head { padding-top: 40px; }
+.site-head h1 { margin: 0 0 6px; font-size: 1.5rem; font-weight: 600; letter-spacing: -.3px; }
+.site-head p { margin: 0 0 28px; color: var(--dim); font-size: .92rem; }
+main { padding-bottom: 56px; }
+
+/* workspace: controls on the left, preview stays pinned on the right */
+.workspace { display: grid; grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); gap: 24px; align-items: start; margin-bottom: 32px; }
+.workspace .block { margin-bottom: 0; }
+.preview-block { position: sticky; top: 16px; z-index: 20; }
+.preview-block .stage { min-height: 0; overflow-y: auto; border-radius: 0; transform-origin: 0 0; }
+.stage-wrap { position: relative; overflow: hidden; border-radius: 14px; background: #e6eaee; }
+@media (max-width: 860px) {
+  .workspace { grid-template-columns: 1fr; gap: 16px; }
+  .preview-block { order: -1; top: 0; padding: 8px 0; background: var(--bg); }
+}
+
+/* controls */
+.controls { display: grid; grid-template-columns: 1fr; gap: 16px; }
+.group { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+details.group { padding: 0; }
+details.group > summary { display: flex; justify-content: space-between; align-items: center; list-style: none; cursor: pointer; padding: 14px 18px; font-size: .7rem; font-weight: 600; color: var(--dim); text-transform: uppercase; letter-spacing: 1.2px; user-select: none; }
+details.group > summary::-webkit-details-marker { display: none; }
+details.group > summary::after { content: "+"; font-size: 1rem; letter-spacing: 0; }
+details.group[open] > summary::after { content: "\2013"; }
+details.group[open] > summary { padding-bottom: 6px; }
+.gbody { padding: 6px 18px 8px; }
+@media (min-width: 861px) { .controls { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; padding-right: 6px; scrollbar-width: thin; } }
+.group h3 { margin: 0 0 14px; font-size: .7rem; font-weight: 600; color: var(--dim); text-transform: uppercase; letter-spacing: 1.2px; }
+.ctl { margin-bottom: 12px; font-size: .8rem; color: var(--dim); }
+.ctl label { display: block; }
+.ctl label span { float: right; color: var(--text); font-variant-numeric: tabular-nums; }
+.ctl input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 2px; margin: 14px 0 6px; background: var(--line); border-radius: 2px; outline: none; cursor: pointer; }
+.ctl input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--ink); border: 0; transition: transform .15s; }
+.ctl input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--ink); border: 0; transition: transform .15s; }
+.ctl input[type=range]::-moz-range-track { height: 2px; background: var(--line); }
+.ctl input[type=range]:hover::-webkit-slider-thumb, .ctl input[type=range]:focus::-webkit-slider-thumb { transform: scale(1.25); }
+.ctl input[type=range]:hover::-moz-range-thumb, .ctl input[type=range]:focus::-moz-range-thumb { transform: scale(1.25); }
+.ctl input[type=text], .ctl select { width: 100%; margin-top: 6px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; }
+.ctl.color { display: flex; align-items: center; justify-content: space-between; }
+.ctl.color input { width: 36px; height: 24px; border: 1px solid var(--line); border-radius: 6px; background: none; padding: 0; cursor: pointer; }
+.ctl.check label { display: flex; align-items: center; gap: 9px; color: var(--text); cursor: pointer; }
+.ctl.check input { -webkit-appearance: none; appearance: none; flex: none; position: relative; width: 14px; height: 14px; margin: 0; border: 1px solid #bdb6a6; border-radius: 3px; background: transparent; cursor: pointer; transition: background .15s, border-color .15s; }
+.ctl.check input:checked { background: var(--ink); border-color: var(--ink); }
+.ctl.check input:checked::after { content: ""; position: absolute; left: 4px; top: 1px; width: 3px; height: 7px; border: solid var(--bg); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
+
+/* blocks */
+.block { margin-bottom: 32px; }
+.block-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.block-head h2 { margin: 0; font-size: .7rem; font-weight: 600; color: var(--dim); text-transform: uppercase; letter-spacing: 1.2px; }
+.upload { font-size: .78rem; color: var(--dim); }
+.upload input { margin-left: 6px; color: var(--dim); font-size: .78rem; }
+.btns { display: flex; gap: 8px; }
+button { background: transparent; color: var(--ink); border: 1px solid var(--ink); border-radius: 8px; padding: 7px 14px; font: inherit; font-size: .8rem; cursor: pointer; transition: background .15s, color .15s; }
+button:hover { background: var(--ink); color: var(--bg); }
+button.ghost { color: var(--dim); border-color: var(--line); }
+button.ghost:hover { background: var(--line); color: var(--text); }
+.imp textarea { width: 100%; min-height: 130px; resize: vertical; margin: 6px 0 10px; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: .72rem/1.5 ui-monospace, Menlo, Consolas, monospace; }
+.imp .impmsg { margin: 8px 0 4px; font-size: .78rem; color: var(--dim); min-height: 1em; }
+.imp .btns { margin-bottom: 4px; }
+pre { margin: 0; max-height: 420px; overflow: auto; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; font-size: .74rem; line-height: 1.6; color: #4a483f; }
+
+/* ===== Sample list (structure only; the generated CSS does the theming) ===== */
+.stage {
+  position: relative; z-index: 0; isolation: isolate; overflow: hidden;
+  min-height: 520px; padding: 22px 18px; border-radius: 14px;
+  background: linear-gradient(135deg, #ffffff, #e6eaee) center / cover no-repeat;
+  font-family: arial, sans-serif; font-size: 13px; color: #dcdcdc;
+}
+.stage a { color: inherit; text-decoration: none; cursor: pointer; }
+.stage .status-menu-container { margin-bottom: 14px; border: 1px solid rgba(255,255,255,.12); }
+.stage .status-menu { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px; }
+.stage .status-button { padding: 4px 14px; color: #e6e6e6; }
+.stage .list-block { padding: 12px; border: 1px solid rgba(255,255,255,.12); }
+.stage .list-status-title { padding: 8px; text-align: center; font-size: 17px; font-weight: 700; }
+.stage .list-table { width: 100%; margin-top: 6px; border-collapse: collapse; }
+.stage .list-table td { padding: 7px 6px; text-align: center; vertical-align: middle; }
+.stage .list-table td.title { text-align: left; font-weight: 600; }
+.stage .list-table td.status { width: 4px; padding: 0; }
+.stage .list-table td.status.completed { background: #2e51a2; }
+.stage .list-table td.title .title-wrap { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.stage .list-table-header td { font-size: 12px; font-weight: 700; }
+.stage .list-table-header td.title { text-align: left; }
+.stage .list-table-header .link.sort { color: inherit; }
+.stage .data.image img { display: block; width: 38px; height: 54px; margin: 0 auto; }
+.stage .score-label { display: inline-block; font-weight: 600; }
+.stage .edit { flex: none; margin-left: auto; font-size: 10px; opacity: .8; white-space: nowrap; }
+.stage .status-menu-container, .stage .list-block { max-width: 1060px; margin-left: auto; margin-right: auto; }
+.stage .status-menu-container { margin-bottom: 14px; }
+
+/* default placeholder text across the sample background (hidden once you add an image) */
+.stage .stage-wm {
+  position: absolute; left: 50%; top: 50%; z-index: -1;
+  transform: translate(-50%, -50%) rotate(-28deg);
+  font: 700 clamp(34px, 8vw, 84px) system-ui, sans-serif; letter-spacing: .12em; white-space: nowrap;
+  color: rgba(0,0,0,.07); pointer-events: none; user-select: none;
+}
+.stage.has-bg .stage-wm { display: none; }
+  </style>
+</head>
+<body>
+  <header class="site-head">
+    <h1>MAL CSS Builder</h1>
+    <p>Tweak the controls, watch the sample list change, then copy the CSS into your MyAnimeList style box.</p>
+  </header>
+
+  <main>
+    <!-- 1. Controls (built by app.js) -->
+    <div class="workspace">
+    <section id="controls" class="controls"></section>
+
+    <!-- 2. Live preview (sticky) -->
+    <section class="block preview-block">
+      <div class="block-head">
+        <h2>Preview</h2>
+        <label class="upload">Upload a background to preview
+          <input type="file" id="bgfile" accept="image/*">
+        </label>
+      </div>
+      <div class="stage-wrap" id="stagewrap"><div class="stage" id="stage">
+        <div class="stage-wm">SAMPLE BACKGROUND</div>
+        <div class="side-l"></div><div class="side-r"></div>
+        <div class="status-menu-container">
+          <div class="status-menu">
+            <a class="status-button">All Anime</a>
+            <a class="status-button">Currently Watching</a>
+            <a class="status-button on">Completed</a>
+            <a class="status-button">On Hold</a>
+            <a class="status-button">Dropped</a>
+          </div>
+        </div>
+        <div class="list-block">
+          <div class="list-unit">
+            <div class="list-status-title"><span class="text">COMPLETED</span></div>
+            <table class="list-table" id="table"></table>
+          </div>
+        </div>
+      </div></div>
+    </section>
+    </div>
+
+    <!-- 3. Generated CSS -->
+    <section class="block">
+      <div class="block-head">
+        <h2>Your CSS</h2>
+        <div class="btns">
+          <button type="button" id="copy">Copy CSS</button>
+          <button type="button" id="download">Download .css</button>
+          <button type="button" id="reset" class="ghost">Reset</button>
+        </div>
+      </div>
+      <pre id="code"></pre>
+    </section>
+  </main>
+
+  <style id="gen"></style>
+  <script>
+/* MAL CSS Builder: controls -> CSS generator -> live preview */
+
+const FONTS = ["Arial","Poppins","Nunito","Quicksand","Montserrat","Outfit","Lexend","Comfortaa","Fredoka","Josefin Sans","Rajdhani","Orbitron"];
+const HFONTS = ["Same as main"].concat(FONTS);
+
+/* Score palettes, lowest score (1) to highest (10) */
+const PALETTES = {
+  "Green to red": ["#d61f1f","#ff3b30","#ff6a1a","#ff8c1a","#ffb300","#ffd60a","#d4e84a","#8be36a","#3fcf5f","#11a84a"],
+  "Cool blues":   ["#5b6cff","#5b7bff","#5b8cff","#5b9eff","#4fb0ff","#45c2ff","#3dd2ff","#40e0d0","#5af0c0","#7dffb0"],
+  "Warm sunset":  ["#7a1f5c","#a1285f","#c8325a","#e04a50","#f26a43","#f98a3a","#fca937","#fdc43a","#ffd95a","#fff08a"],
+  "Pastel":       ["#ff9aa2","#ffb18f","#ffc98b","#ffe08c","#fff09a","#e2f0a0","#c2eaa8","#a4e3bd","#98dbd6","#a9c8f5"],
+  "Grayscale":    ["#6b6b6b","#7a7a7a","#8a8a8a","#9a9a9a","#aaaaaa","#bbbbbb","#cccccc","#dddddd","#eeeeee","#ffffff"],
+  "Rainbow":      ["#ff3b30","#ff6a1a","#ffb300","#ffd60a","#8be36a","#3fcf5f","#1fb5c9","#3a7bff","#7a4bff","#c24bff"]
+};
+const PAL_NAMES = Object.keys(PALETTES).concat(["Accent shades"]);
+
+/* Control definitions.
+   range:  [key, "range", label, min, max, step, default]
+   color:  [key, "color", label, default]
+   check:  [key, "check", label, default]
+   select: [key, "select", label, options, default]
+   text:   [key, "text",  label, default]
+   Every new option defaults to "off / unchanged", so untouched controls add nothing to the CSS. */
+const SCHEMA = [
+  { g: "Panels", open: true, i: [
+    ["po","range","Panel opacity",0.2,1,0.01,0.65],
+    ["pb","range","Panel blur (px)",0,10,0.5,3],
+    ["psat","range","Glass color saturation",1,2,0.05,1],
+    ["rad","range","Corner roundness (px)",0,30,1,14],
+    ["bor","range","Panel border opacity",0,0.6,0.01,0.12],
+    ["sh","range","Floating shadow",0,0.7,0.01,0.4],
+    ["gl","range","Accent glow",0,0.8,0.01,0.32],
+    ["eh","range","Edge highlight",0,0.8,0.01,0.6],
+    ["es","range","Edge shadow",0,0.8,0.01,0.6],
+    ["hop","range","Header bar opacity",0.2,1,0.01,0.6],
+    ["hh","range","Category bar thickness (px, 0 = default)",0,30,1,0] ]},
+  { g: "Colors", open: true, i: [
+    ["acc","color","Accent color","#40e0d0"],
+    ["pan","color","Panel tint","#081824"],
+    ["h1","color","Header gradient start","#1fb5c9"],
+    ["h2","color","Header gradient middle","#40e0d0"],
+    ["h3","color","Header gradient end","#6cc04a"],
+    ["txt","color","Title text color","#ffffff"],
+    ["hdr","color","Column header text color","#ffffff"],
+    ["btc","color","Body text color","#dcdcdc"],
+    ["ctc","color","Category title color","#ffffff"],
+    ["tabc","color","Tab text color","#e6e6e6"] ]},
+  { g: "Panel fill & texture", i: [
+    ["pgrad","check","Gradient panel fill",false],
+    ["pan2","color","Gradient end color","#1a0f2e"],
+    ["pang","range","Gradient angle (deg)",0,360,5,160],
+    ["scan","check","Scanlines",false],
+    ["grain","check","Dotted grain",false],
+    ["outl","check","Accent outline on panels",false] ]},
+  { g: "Rows & covers", i: [
+    ["lift","range","Row hover lift (px)",0,10,1,2],
+    ["slide","range","Row hover slide (px)",0,20,1,4],
+    ["hov","range","Row hover darkness",0,0.7,0.01,0.4],
+    ["div","range","Divider strength",0,0.4,0.01,0.1],
+    ["sc","range","Cover zoom on hover",1,1.8,0.01,1.3],
+    ["rot","range","Cover tilt (degrees)",0,10,0.5,3],
+    ["cs","range","Cover shadow",0,1,0.01,0.6],
+    ["crad","range","Cover roundness (px)",0,20,1,8] ]},
+  { g: "Covers: extras", i: [
+    ["csz","range","Cover width (px, 0 = default)",0,120,1,0],
+    ["cglow","range","Cover glow",0,1,0.01,0],
+    ["cbord","check","Cover border",false],
+    ["cbc","color","Cover border color","#ffffff"],
+    ["cbw","range","Cover border width (px)",1,5,1,2],
+    ["gray","check","Black & white covers (color on hover)",false],
+    ["cbr","range","Cover brightness",0.5,1.5,0.05,1] ]},
+  { g: "Rows: extras", i: [
+    ["rp","range","Row padding (px, 0 = default)",0,20,1,0],
+    ["zebra","check","Zebra-striped rows",false],
+    ["tint","check","Tint rows by score (high green, low red)",false],
+    ["tinta","range","Tint strength",0.02,0.3,0.01,0.08],
+    ["hovacc","check","Row hover uses accent color",false],
+    ["focus","check","Dim other rows on hover",false],
+    ["swi","range","Glint sweep brightness",0.02,0.3,0.01,0.07],
+    ["sbar","check","Custom status bar (left edge)",false],
+    ["sbc","color","Status bar color","#2e51a2"],
+    ["sbw","range","Status bar width (px)",2,14,1,4],
+    ["sbg","range","Status bar glow (px)",0,24,1,0],
+    ["sticky","check","Sticky column headers",false],
+    ["hbg","check","Column header row background",false],
+    ["hbgc","color","Header row background color","#000000"],
+    ["hbgo","range","Header row background opacity",0.05,1,0.01,0.35],
+    ["hdv","range","Header divider strength",0,0.6,0.01,0.18] ]},
+  { g: "Typography", i: [
+    ["font","select","Main font",FONTS,"Poppins"],
+    ["hfont","select","Heading font (headers, tabs, category)",HFONTS,"Same as main"],
+    ["bts","range","Body text size (px, 0 = default)",0,24,1,0],
+    ["ts","range","Title size (px, 0 = default)",0,28,1,0],
+    ["hts","range","Column header size (px, 0 = default)",0,22,1,0],
+    ["tls","range","Title letter spacing (px)",0,3,0.1,0],
+    ["cts","range","Category title spacing (px)",0,10,0.5,1],
+    ["ssz","range","Score size (px, 0 = default)",0,28,1,0],
+    ["tsh","range","Text shadow strength",0,1,0.01,0.8],
+    ["upper","check","UPPERCASE titles",false],
+    ["uph","check","UPPERCASE column headers",false],
+    ["neon","check","Neon glow on titles",false],
+    ["lhc","check","Custom link hover color",false],
+    ["lhcol","color","Link hover color","#ffffff"] ]},
+  { g: "Scores", i: [
+    ["pal","select","Score palette",PAL_NAMES,"Green to red"],
+    ["scores","check","Colored scores",true],
+    ["glow10","check","Glowing 10s",true],
+    ["sglow","check","Glow on all scores",false],
+    ["spill","check","Score pills",false] ]},
+  { g: "Hide columns", i: [
+    ["hNum","check","Hide # column",false],
+    ["hImg","check","Hide cover images",false],
+    ["hType","check","Hide Type",false],
+    ["hProg","check","Hide Progress",false],
+    ["hPrem","check","Hide Premiered",false],
+    ["hMal","check","Hide MAL Score",false],
+    ["hEdit","check","Hide Edit - More links",false] ]},
+  { g: "Page & background", i: [
+    ["bg","text","Background image URL (optional)",""],
+    ["bgsize","select","Background size",["cover","contain","auto 100%","100% auto"],"cover"],
+    ["bgpos","select","Background position",["Default","center","top","bottom","left","right"],"Default"],
+    ["bgblur","range","Background blur (px)",0,20,0.5,0],
+    ["bgsat","range","Background saturation",0,2,0.05,1],
+    ["bghue","range","Background hue shift (deg)",0,360,5,0],
+    ["dim","range","Background dim",0,0.8,0.01,0],
+    ["vg","range","Vignette strength",0,0.7,0.01,0.15],
+    ["vig","check","Vignette",true] ]},
+  { g: "Side images", i: [
+    ["simgL","text","Left image URL (may look blank in preview, still works on MAL)",""],
+    ["simgR","text","Right image URL (optional, same note)",""],
+    ["sameR","check","Use left image on right (mirrored) if right is empty",false],
+    ["sw","range","Image width (px)",60,600,10,240],
+    ["sgap","range","Distance from screen edge (px)",0,200,2,0],
+    ["sfit","select","Image fit",["contain","cover"],"contain"],
+    ["svp","select","Vertical position",["center","top","bottom"],"center"],
+    ["sop","range","Image opacity",0.1,1,0.01,1],
+    ["sfade","range","Image shadow glow",0,1,0.01,0],
+    ["shide","check","Hide on narrow screens (under 1200px)",true] ]},
+  { g: "Animation", i: [
+    ["fade","check","Panel fade-in on load",true],
+    ["pulse","check","Pulsing glow",true],
+    ["ps","range","Pulse period (s)",2,20,0.5,6],
+    ["shimmer","check","Shimmering header bar",false],
+    ["shp","range","Shimmer period (s)",2,20,0.5,8],
+    ["rainbow","check","Rainbow color-cycling header bar",false],
+    ["rbp","range","Rainbow period (s)",3,40,1,12],
+    ["sweep","check","Glint sweep on row hover",true],
+    ["tilt","check","Cover enlarges on row hover",true],
+    ["alt","check","Alternate tilt direction",true] ]},
+  { g: "Effects", i: [
+    ["bevel","check","Beveled glass edges",true],
+    ["shadow","check","Floating shadows",true],
+    ["pills","check","Pill-style category tabs",true],
+    ["tabhl","range","Tab highlight strength",0.1,0.8,0.01,0.35],
+    ["divs","check","Row dividers",true],
+    ["hdiv","check","Column header dividers",true],
+    ["bar","check","Accent bar on row hover",true],
+    ["scroll","check","Themed scrollbar",false],
+    ["sel","check","Accent text selection",false] ]}
+];
+
+const hx = h => [1,3,5].map(i => parseInt(h.substr(i,2),16)).join(",");
+const n = x => +(+x).toFixed(2);
+const mix = (h,p) => "#" + [1,3,5].map(i => { const v = parseInt(h.substr(i,2),16); return Math.round(v + (255 - v) * p).toString(16).padStart(2,"0"); }).join("");
+const fam = f => f === "Arial" ? "arial, sans-serif" : "'" + f + "', arial, sans-serif";
+const gfont = f => `@import url('https://fonts.googleapis.com/css2?family=${f.replace(/ /g,"+")}:wght@400;700&display=swap');`;
+const palette = s => s.pal === "Accent shades" ? Array.from({ length: 10 }, (_, i) => mix(s.acc, i * 0.06)) : (PALETTES[s.pal] || PALETTES["Green to red"]);
+
+/* s = settings object, o = preview overrides (body selector, positioning) */
+function build(s, o) {
+  o = o || {};
+  const B = o.body || "body", pos = o.pos || "fixed", att = o.att || "fixed";
+  const root = o.body ? o.body + " " : "";
+  const P = hx(s.pan), A = hx(s.acc);
+  const hSame = s.hfont === "Same as main";
+  const ffMain = fam(s.font), ffHead = hSame ? ffMain : fam(s.hfont);
+  const hi = n(s.gl), lo = n(s.gl * 0.375);
+  const layers = s.shadow
+    ? `0 2px 4px rgba(0,0,0,${n(s.sh)}),\n      0 10px 20px rgba(0,0,0,${n(s.sh)}),\n      0 24px 48px rgba(0,0,0,${n(s.sh*1.18)}),\n      ` : "";
+  const boxS = (blur, a) => `${layers}0 0 ${blur}px rgba(${A},${a}),\n      inset 0 1px 0 rgba(255,255,255,.18)`;
+  const anims = [];
+  if (s.fade) anims.push("fadeUp .8s ease both");
+  if (s.pulse) anims.push(`glowPulse ${n(s.ps)}s ease-in-out infinite`);
+  const c = [];
+
+  if (s.font !== "Arial") c.push(gfont(s.font));
+  if (!hSame && s.hfont !== "Arial" && s.hfont !== s.font) c.push(gfont(s.hfont));
+
+  /* ---------- PAGE ---------- */
+  c.push("/* ===== PAGE ===== */");
+  if (s.bg) c.push(`${B} {\n  background-image: url("${s.bg.replace(/[\r\n\\]/g,"").replace(/"/g,"%22")}") !important;\n  background-size: ${s.bgsize} !important;${s.bgpos !== "Default" ? `\n  background-position: ${s.bgpos} !important;` : ""}\n  background-attachment: ${att} !important;\n}`);
+  if (s.bgblur > 0 || s.bgsat !== 1 || s.bghue > 0) {
+    const f = [];
+    if (s.bgblur > 0) f.push(`blur(${n(s.bgblur)}px)`);
+    if (s.bgsat !== 1) f.push(`saturate(${n(s.bgsat)})`);
+    if (s.bghue > 0) f.push(`hue-rotate(${s.bghue}deg)`);
+    if (s.dim > 0) f.push(`brightness(${n(1 - s.dim)})`);
+    c.push(`${B}::before {\n  content: "";\n  position: ${pos};\n  inset: 0;\n  background: inherit;\n  filter: ${f.join(" ")};${s.bgblur > 0 ? "\n  transform: scale(1.06);" : ""}\n  pointer-events: none;\n  z-index: -1;\n}`);
+  } else if (s.dim > 0) {
+    c.push(`${B}::before {\n  content: "";\n  position: ${pos};\n  inset: 0;\n  background: rgba(0,0,0,${n(s.dim)});\n  pointer-events: none;\n  z-index: -1;\n}`);
+  }
+  if (s.vig) c.push(`${B}::after {\n  content: "";\n  position: ${pos};\n  inset: 0;\n  background: radial-gradient(circle, transparent 50%, rgba(0,0,0,${n(s.vg)}) 100%);\n  pointer-events: none;\n  z-index: -1;\n}`);
+
+  /* ---------- SIDE IMAGES ---------- */
+  const uq = u => u.replace(/[\r\n\\]/g,"").replace(/"/g,"%22");
+  const sideL = s.simgL, sideR = s.simgR || (s.sameR ? s.simgL : "");
+  if (sideL || sideR) {
+    c.push("/* ===== SIDE IMAGES ===== */");
+    const w = o.sw || s.sw, gap = o.sw ? Math.round(s.sgap * 0.4) : s.sgap;
+    const vp = "center " + s.svp;
+    const sideCss = (url, edge, flip) => `  content: "";\n  position: ${pos};\n  top: 0;\n  bottom: 0;\n  ${edge}: ${gap}px;\n  width: ${w}px;\n  background: url("${uq(url)}") ${vp} / ${s.sfit} no-repeat;\n  opacity: ${n(s.sop)};${s.sfade > 0 ? `\n  filter: drop-shadow(0 0 14px rgba(${A},${n(s.sfade)}));` : ""}${flip ? "\n  transform: scaleX(-1);" : ""}\n  pointer-events: none;\n  z-index: -1;`;
+    const selL = o.body ? `${o.body} .side-l` : "html::before";
+    const selR = o.body ? `${o.body} .side-r` : "html::after";
+    if (sideL) c.push(`${selL} {\n${sideCss(sideL, "left", false)}\n}`);
+    if (sideR) c.push(`${selR} {\n${sideCss(sideR, "right", !s.simgR && s.sameR)}\n}`);
+    if (s.shide && !o.body) c.push(`@media (max-width: 1200px) {\n  html::before, html::after { display: none; }\n}`);
+  }
+
+  /* ---------- PANELS ---------- */
+  c.push("/* ===== PANELS ===== */");
+  const sat = s.psat !== 1 ? ` saturate(${n(s.psat)})` : "";
+  c.push(`.status-menu-container, .list-block, .cover-block {\n  background-color: rgba(${P},${n(s.po)}) !important;\n  backdrop-filter: blur(${n(s.pb)}px)${sat};\n  -webkit-backdrop-filter: blur(${n(s.pb)}px)${sat};\n  border-radius: ${s.rad}px;\n  border: 1px solid rgba(255,255,255,${n(s.bor)}) !important;\n}`);
+  const pl = [], ps = [];
+  if (s.pgrad) { pl.push(`linear-gradient(${s.pang}deg, rgba(${P},${n(s.po)}), rgba(${hx(s.pan2)},${n(s.po)}))`); ps.push("auto"); }
+  if (s.scan) { pl.push("repeating-linear-gradient(0deg, rgba(0,0,0,.14) 0, rgba(0,0,0,.14) 1px, transparent 1px, transparent 3px)"); ps.push("auto"); }
+  if (s.grain) { pl.push("radial-gradient(rgba(255,255,255,.07) 1px, transparent 1.2px)"); ps.push("5px 5px"); }
+  if (pl.length) c.push(`.status-menu-container, .list-block, .cover-block {\n  background-image: ${pl.join(",\n    ")} !important;\n  background-size: ${ps.join(", ")} !important;\n}`);
+  if (s.bevel) c.push(`.list-block, .cover-block {\n  border-top-color: rgba(255,255,255,${n(s.eh)}) !important;\n  border-left-color: rgba(255,255,255,${n(s.eh*.63)}) !important;\n  border-right-color: rgba(0,0,0,${n(s.es*.78)}) !important;\n  border-bottom-color: rgba(0,0,0,${n(s.es)}) !important;\n}\n.status-menu-container {\n  border-top-color: rgba(255,255,255,${n(s.eh)}) !important;\n  border-bottom-color: rgba(0,0,0,${n(s.es)}) !important;\n}`);
+  if (s.outl) c.push(`.status-menu-container, .list-block, .cover-block {\n  border: 1px solid rgba(${A},.7) !important;\n}`);
+  c.push(`.list-block {\n  box-shadow: ${boxS(18, lo)};${anims.length ? `\n  animation: ${anims.join(", ")};` : ""}\n}`);
+  if (s.shadow) c.push(`.status-menu-container {\n  box-shadow: 0 8px 22px rgba(0,0,0,${n(s.sh*1.1)}), inset 0 1px 0 rgba(255,255,255,.15);\n}`);
+  if (s.pulse) c.push(`@keyframes glowPulse {\n  0%, 100% { box-shadow: ${boxS(18, lo)}; }\n  50% { box-shadow: ${boxS(34, hi)}; }\n}`);
+  if (s.fade) c.push(`@keyframes fadeUp {\n  from { opacity: 0; transform: translateY(20px); }\n  to { opacity: 1; transform: translateY(0); }\n}`);
+
+  /* ---------- CATEGORY BAR ---------- */
+  c.push("/* ===== CATEGORY BAR ===== */");
+  c.push(`.list-unit .list-status-title {\n  background: linear-gradient(90deg, rgba(${hx(s.h1)},${n(s.hop)}), rgba(${hx(s.h2)},${n(s.hop)}) 65%, rgba(${hx(s.h3)},${n(s.hop*.65)})) !important;${s.shimmer ? `\n  background-size: 200% 100% !important;\n  animation: shimmer ${n(s.shp)}s ease-in-out infinite alternate;` : ""}${s.hh > 0 ? `\n  padding-top: ${s.hh}px !important;\n  padding-bottom: ${s.hh}px !important;` : ""}\n  border-radius: 10px;\n  border: 1px solid rgba(255,255,255,.2);${s.shadow ? `\n  box-shadow: 0 6px 16px rgba(0,0,0,${n(s.sh*1.1)}), inset 0 1px 0 rgba(255,255,255,.35);` : ""}\n}`);
+  if (s.shimmer) c.push("@keyframes shimmer {\n  from { background-position: 0% 50%; }\n  to { background-position: 100% 50%; }\n}");
+  if (s.rainbow) c.push(`.list-unit .list-status-title {\n  animation: ${s.shimmer ? `shimmer ${n(s.shp)}s ease-in-out infinite alternate, ` : ""}hueSpin ${s.rbp}s linear infinite;\n}\n@keyframes hueSpin {\n  from { filter: hue-rotate(0deg); }\n  to { filter: hue-rotate(360deg); }\n}`);
+
+  /* ---------- TEXT ---------- */
+  c.push("/* ===== TEXT ===== */");
+  const dataSel = ".list-table .list-table-data .data, .list-table .list-table-data .data a";
+  const headSel = ".list-table .list-table-header .header-title, .list-table .list-table-header .header-title a,\n.list-unit .list-status-title .text,\n.status-menu-container .status-menu .status-button";
+  c.push(hSame
+    ? `${dataSel},\n${headSel} {\n  font-family: ${ffMain};\n}`
+    : `${dataSel} {\n  font-family: ${ffMain};\n}\n${headSel} {\n  font-family: ${ffHead};\n}`);
+  c.push(`.list-table .list-table-data .data a, .list-table .list-table-data .data .link {\n  color: ${s.txt} !important;\n}\n.list-table .list-table-data .data {\n  color: ${s.btc};\n  text-shadow: 0 1px 4px rgba(0,0,0,${n(s.tsh)});\n}\n.list-table .list-table-header .header-title,\n.list-table .list-table-header .header-title a,\n.list-table .list-table-header .header-title .link,\n.list-table .list-table-header .header-title .link.sort {\n  color: ${s.hdr} !important;\n}\n.list-unit .list-status-title .text {\n  color: ${s.ctc};\n  text-shadow: 0 1px 6px rgba(0,0,0,.6);\n  letter-spacing: ${n(s.cts)}px;\n}\n.status-menu-container .status-menu .status-button { color: ${s.tabc}; }\na:hover, .list-table .list-table-data .data a:hover { color: ${s.lhc ? s.lhcol : mix(s.acc,.45)} !important; }`);
+  if (s.bts > 0) c.push(`.list-table .list-table-data .data {\n  font-size: ${s.bts}px !important;\n}`);
+  const tl = [];
+  if (s.ts > 0) tl.push(`font-size: ${s.ts}px !important;`);
+  if (s.tls > 0) tl.push(`letter-spacing: ${n(s.tls)}px;`);
+  if (s.upper) tl.push("text-transform: uppercase;");
+  if (s.neon) tl.push(`text-shadow: 0 0 6px ${s.acc}, 0 0 16px rgba(${A},.6);`);
+  if (tl.length) c.push(`.list-table .list-table-data .data.title a {\n  ${tl.join("\n  ")}\n}`);
+  const hl = [];
+  if (s.hts > 0) hl.push(`font-size: ${s.hts}px !important;`);
+  if (s.uph) hl.push("text-transform: uppercase;");
+  if (hl.length) c.push(`.list-table .list-table-header .header-title,\n.list-table .list-table-header .header-title a {\n  ${hl.join("\n  ")}\n}`);
+
+  c.push(s.pills
+    ? `.status-menu-container .status-menu .status-button {\n  border-radius: 20px;\n  padding: 4px 14px;\n  transition: background .25s;\n}\n.status-menu-container .status-menu .status-button:hover,\n.status-menu-container .status-menu .status-button.on {\n  background: rgba(${A},${n(s.tabhl)});\n  color: #fff;\n  text-shadow: 0 0 10px ${s.acc};\n}`
+    : `.status-menu-container .status-menu .status-button.on {\n  color: #fff;\n  text-shadow: 0 0 10px ${s.acc};\n  border-bottom: 2px solid ${s.acc};\n}`);
+
+  /* ---------- ROWS ---------- */
+  c.push("/* ===== ROWS ===== */");
+  c.push(`.list-table > tbody:nth-of-type(2n+1), .list-table, .list-container,\n.list-table .list-table-header .header-title {\n  background-color: transparent !important;\n  border: 0 transparent solid !important;\n}\n.list-table .list-table-data .data {\n  border: 0 transparent solid !important;${s.divs ? `\n  box-shadow: inset 0 -1px 0 rgba(255,255,255,${n(s.div)});` : ""}\n}`);
+  if (s.rp > 0) c.push(`.list-table .list-table-data .data {\n  padding-top: ${s.rp}px !important;\n  padding-bottom: ${s.rp}px !important;\n}`);
+  if (s.zebra) c.push(`.list-table > tbody:nth-of-type(even):not(:hover) {\n  background-color: rgba(255,255,255,.045) !important;\n}`);
+  if (s.tint) {
+    const t = n(s.tinta);
+    const sel = ks => ks.map(k => `.list-table > tbody:has(.score-label.score-${k}):not(:hover)`).join(",\n");
+    c.push(`${sel([9,10])} {\n  background-color: rgba(63,207,95,${t}) !important;\n}\n${sel([1,2,3,4])} {\n  background-color: rgba(255,59,48,${t}) !important;\n}`);
+  }
+  if (s.focus) c.push(`.list-table:hover tbody:not(:hover) {\n  opacity: .55;\n}`);
+  if (s.sbar) c.push(`.list-table .list-table-data .data.status {\n  background-color: ${s.sbc} !important;\n  border-left-color: ${s.sbc} !important;\n  width: ${s.sbw}px !important;\n  min-width: ${s.sbw}px;\n  padding: 0 !important;${s.sbg > 0 ? `\n  box-shadow: 0 0 ${s.sbg}px ${s.sbc};` : ""}\n}`);
+  const hbgCol = s.hbg ? `rgba(${hx(s.hbgc)},${n(s.hbgo)})` : (s.sticky ? `rgba(${P},.92)` : "");
+  if (s.sticky || hbgCol) c.push(`.list-table .list-table-header .header-title {${hbgCol ? `\n  background-color: ${hbgCol} !important;` : ""}${s.sticky ? "\n  position: sticky;\n  top: 0;\n  z-index: 6;" : ""}\n}`);
+  if (s.hdiv) c.push(`.list-table .list-table-header .header-title:not(.status) ~ .header-title {\n  border-left: 1px solid rgba(255,255,255,${n(s.hdv)}) !important;\n}`);
+  c.push(`.list-table tbody { transition: all .25s ease; }\n.list-table tbody:hover {\n  position: relative;\n  z-index: 5;\n  transform: translateX(${s.slide}px) translateY(-${s.lift}px);\n  box-shadow: ${s.bar ? `inset 4px 0 0 ${s.acc}, ` : ""}0 8px 18px rgba(0,0,0,.4);\n}\ntbody[class*="list-item"]:hover,\n.list-table tbody:nth-of-type(2n+1):hover {\n  background-color: ${s.hovacc ? `rgba(${A},${n(s.hov * 0.6)})` : `rgba(0,0,0,${n(s.hov)})`} !important;\n}`);
+  if (s.sweep) c.push(`.list-table > tbody:hover {\n  background-image: linear-gradient(110deg, transparent 38%, rgba(255,255,255,${n(s.swi)}) 50%, transparent 62%);\n  background-size: 250% 100%;\n  background-repeat: no-repeat;\n  animation: rowSweep 1.3s ease-out 1;\n}\n@keyframes rowSweep {\n  from { background-position: 130% 0; }\n  to { background-position: -130% 0; }\n}`);
+
+  /* ---------- COVERS ---------- */
+  c.push("/* ===== COVERS ===== */");
+  const bright = s.cbr !== 1 ? ` brightness(${n(s.cbr)})` : "";
+  const fBase = (s.gray ? "grayscale(1)" : "saturate(.9)") + bright;
+  const fHover = (s.gray ? "grayscale(0) saturate(1.2)" : "saturate(1.2)") + bright;
+  const cshadow = `0 6px 18px rgba(0,0,0,${n(s.cs)}), 0 0 0 1px rgba(255,255,255,.15)` + (s.cglow > 0 ? `, 0 0 16px rgba(${A},${n(s.cglow)})` : "");
+  c.push(`.list-table .list-table-data .data.image img {\n  transition: transform .35s ease, box-shadow .35s ease, filter .35s ease;\n  border-radius: ${s.crad}px;\n  box-shadow: ${cshadow};\n  filter: ${fBase};\n  position: relative;${s.csz > 0 ? `\n  width: ${s.csz}px !important;\n  height: ${Math.round(s.csz * 1.42)}px !important;` : ""}${s.cbord ? `\n  border: ${s.cbw}px solid ${s.cbc} !important;` : ""}\n}`);
+  if (s.tilt) {
+    c.push(`.list-table tbody:hover .list-table-data .data.image img {\n  transform: scale(${n(s.sc)}) rotate(${s.alt ? "-" : ""}${n(s.rot)}deg);\n  z-index: 10;\n  filter: ${fHover};\n}`);
+    if (s.alt) c.push(`.list-table tbody:nth-of-type(even):hover .list-table-data .data.image img {\n  transform: scale(${n(s.sc)}) rotate(${n(s.rot)}deg);\n}`);
+  } else if (s.gray) {
+    c.push(`.list-table tbody:hover .list-table-data .data.image img {\n  filter: ${fHover};\n}`);
+  }
+
+  /* ---------- SCORES ---------- */
+  if (s.scores || s.glow10 || s.spill || s.sglow || s.ssz > 0) {
+    c.push("/* ===== SCORES ===== */");
+    const pal = palette(s);
+    if (s.scores) c.push(pal.map((col, i) => `.score-label.score-${i+1} { color: ${col} !important; }`).join("\n"));
+    if (s.sglow) c.push(".score-label {\n  text-shadow: 0 0 7px currentColor;\n}");
+    if (s.glow10) c.push(`.score-label.score-10 { text-shadow: 0 0 8px rgba(${hx(pal[9])},.9); font-weight: 600; }`);
+    if (s.spill) c.push(".score-label {\n  border-radius: 12px;\n  padding: 2px 9px;\n  background: rgba(0,0,0,.35);\n  font-weight: 600;\n}");
+    if (s.ssz > 0) c.push(`.score-label {\n  font-size: ${s.ssz}px !important;\n}`);
+  }
+
+  /* ---------- HIDDEN COLUMNS ---------- */
+  const cols = [[s.hNum, [".number"]], [s.hImg, [".image"]], [s.hType, [".type"]], [s.hProg, [".progress"]], [s.hPrem, [".release", ".release-season", ".premiered"]], [s.hMal, [".mal", ".mal-score"]]];
+  const hide = [];
+  cols.forEach(([on, cls]) => { if (on) cls.forEach(k => { hide.push(`.list-table .list-table-header .header-title${k}`, `.list-table .list-table-data .data${k}`); }); });
+  if (s.hEdit) hide.push(".list-table .list-table-data .data.title .edit", ".list-table .list-table-data .data.title .add-edit-more");
+  if (hide.length) c.push("/* ===== HIDDEN COLUMNS ===== */", `${hide.join(",\n")} {\n  display: none !important;\n}`);
+
+  /* ---------- EXTRAS ---------- */
+  const ex = [];
+  if (s.scroll) ex.push(`${o.body || "html"} {\n  scrollbar-color: ${s.acc} rgba(0,0,0,.25);\n}\n${o.body || ""}::-webkit-scrollbar { width: 10px; }\n${o.body || ""}::-webkit-scrollbar-track { background: rgba(0,0,0,.25); }\n${o.body || ""}::-webkit-scrollbar-thumb {\n  background: rgba(${A},.6);\n  border-radius: 10px;\n}\n${o.body || ""}::-webkit-scrollbar-thumb:hover { background: ${s.acc}; }`);
+  if (s.sel) ex.push(`${root}::selection {\n  background: rgba(${A},.55);\n  color: #fff;\n}`);
+  if (ex.length) c.push("/* ===== EXTRAS ===== */", ...ex);
+
+  return c.join("\n\n") + "\n";
+}
+
+/* ---------- Import: read CSS text back into settings ---------- */
+function parseCss(text) {
+  const css = String(text || "").replace(/\/\*[\s\S]*?\*\//g, "");
+  const norm = s => s.replace(/\s+/g, " ").replace(/\s*,\s*/g, ",").trim();
+  const splitDecls = body => {
+    const out = {}; let cur = "", paren = 0, q = null;
+    const flush = () => {
+      const k = cur.indexOf(":");
+      if (k > 0) out[cur.slice(0, k).trim().toLowerCase()] = cur.slice(k + 1).replace(/!important/gi, "").trim();
+      cur = "";
+    };
+    for (let i = 0; i < body.length; i++) {
+      const ch = body[i];
+      if (q) { cur += ch; if (ch === "\\") { cur += body[++i] || ""; } else if (ch === q) q = null; continue; }
+      if (ch === '"' || ch === "'") { q = ch; cur += ch; continue; }
+      if (ch === "(") paren++; else if (ch === ")") paren--;
+      if (ch === ";" && paren <= 0) { flush(); continue; }
+      cur += ch;
+    }
+    flush();
+    return out;
+  };
+
+  /* split into rules and at-rules */
+  const rules = [], ats = [];
+  { let depth = 0, selStart = 0, bodyStart = 0, sel = "", q = null, paren = 0;
+    for (let i = 0; i < css.length; i++) {
+      const ch = css[i];
+      if (q) { if (ch === "\\") i++; else if (ch === q) q = null; continue; }
+      if (ch === '"' || ch === "'") { q = ch; continue; }
+      if (ch === "(") paren++; else if (ch === ")") paren--;
+      if (paren > 0) continue;
+      if (ch === "{") { if (depth === 0) { sel = css.slice(selStart, i).trim(); bodyStart = i + 1; } depth++; }
+      else if (ch === "}") {
+        depth--;
+        if (depth <= 0) {
+          if (depth === 0) {
+            const body = css.slice(bodyStart, i);
+            if (sel[0] === "@") ats.push({ at: sel, body });
+            else rules.push({ sel: norm(sel), decls: splitDecls(body) });
+          }
+          depth = 0; selStart = i + 1;
+        }
+      }
+      else if (ch === ";" && depth === 0) selStart = i + 1;
+    }
+  }
+
+  const o = {};
+  const all = sel => rules.filter(r => r.sel === sel);
+  const first = sel => all(sel)[0];
+  const colors = v => {
+    const re = /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)/g, a = []; let m;
+    while ((m = re.exec(v || ""))) a.push({ r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : parseFloat(m[4]),
+      hex: "#" + [m[1], m[2], m[3]].map(x => (+x).toString(16).padStart(2, "0")).join("") });
+    return a;
+  };
+  const px = v => { const m = /(-?[\d.]+)px/.exec(v || ""); return m ? parseFloat(m[1]) : null; };
+  const isHex = v => /^#[0-9a-f]{6}$/i.test(v || "");
+  const accCand = [];
+
+  /* ----- fonts ----- */
+  const fontOf = v => {
+    const m = /^\s*(?:'([^']+)'|"([^"]+)"|([\w ]+?))\s*,/.exec(v || ""); const f = m && (m[1] || m[2] || m[3]);
+    if (!f) return null;
+    return /^arial$/i.test(f.trim()) ? "Arial" : (FONTS.find(x => x.toLowerCase() === f.trim().toLowerCase()) || null);
+  };
+  const mainR = rules.find(r => (r.sel === ".list-table .list-table-data .data,.list-table .list-table-data .data a" || r.sel.indexOf(".list-table .list-table-data .data,") === 0) && r.decls["font-family"]);
+  if (mainR) {
+    const f = fontOf(mainR.decls["font-family"]); if (f) o.font = f;
+    if (mainR.sel.indexOf("status-button") > -1) o.hfont = "Same as main";
+    else {
+      const hr = rules.find(r => r.sel.indexOf(".list-table .list-table-header .header-title,") === 0 && r.decls["font-family"]);
+      const hf = hr && fontOf(hr.decls["font-family"]); if (hf) o.hfont = hf;
+    }
+  }
+
+  /* ----- page ----- */
+  const body = first("body");
+  if (body && body.decls["background-image"]) {
+    const m = /url\("((?:[^"\\]|\\.)*)"\)/.exec(body.decls["background-image"]); if (m) o.bg = m[1];
+    if (body.decls["background-size"]) o.bgsize = body.decls["background-size"];
+    o.bgpos = body.decls["background-position"] || "Default";
+  } else { o.bg = ""; }
+  o.bgblur = 0; o.bgsat = 1; o.bghue = 0; o.dim = 0;
+  const bb = first("body::before");
+  if (bb) {
+    const f = bb.decls.filter || "";
+    if (f) {
+      let m = /blur\(([\d.]+)px\)/.exec(f); if (m) o.bgblur = +m[1];
+      m = /saturate\(([\d.]+)\)/.exec(f); if (m) o.bgsat = +m[1];
+      m = /hue-rotate\(([\d.]+)deg\)/.exec(f); if (m) o.bghue = +m[1];
+      m = /brightness\(([\d.]+)\)/.exec(f); if (m) o.dim = Math.round((1 - +m[1]) * 100) / 100;
+    } else { const c = colors(bb.decls.background)[0]; if (c) o.dim = c.a; }
+  }
+  const ba = first("body::after");
+  o.vig = !!(ba && /radial-gradient/.test(ba.decls.background || ""));
+  if (o.vig) { const c = colors(ba.decls.background)[0]; if (c) o.vg = c.a; }
+
+  /* ----- side images ----- */
+  o.simgL = ""; o.simgR = ""; o.sameR = false;
+  const sideRe = /url\("((?:[^"\\]|\\.)*)"\)\s+center\s+(top|bottom|center)\s*\/\s*(contain|cover)/;
+  const hb = first("html::before"), ha = first("html::after");
+  const sideInfo = r => r ? { m: sideRe.exec(r.decls.background || ""), r } : null;
+  const sl = sideInfo(hb), sr = sideInfo(ha);
+  const sAny = (sl && sl.m && sl) || (sr && sr.m && sr);
+  if (sAny) {
+    o.sfit = sAny.m[3]; o.svp = sAny.m[2];
+    const w = px(sAny.r.decls.width); if (w !== null) o.sw = w;
+    const g = px(sAny.r.decls.left !== undefined ? sAny.r.decls.left : sAny.r.decls.right); if (g !== null) o.sgap = g;
+    const op = parseFloat(sAny.r.decls.opacity); if (isFinite(op)) o.sop = op;
+    const dsh = /drop-shadow\([^)]*?(rgba?\([^)]*\))/.exec(sAny.r.decls.filter || "");
+    o.sfade = dsh && colors(dsh[1])[0] ? colors(dsh[1])[0].a : 0;
+    if (dsh && colors(dsh[1])[0]) accCand.push(colors(dsh[1])[0].hex);
+    if (sl && sl.m) o.simgL = sl.m[1];
+    if (sr && sr.m) {
+      if (sl && sl.m && sl.m[1] === sr.m[1] && /scaleX\(-1\)/.test(sr.r.decls.transform || "")) o.sameR = true;
+      else o.simgR = sr.m[1];
+    }
+    o.shide = ats.some(a => /^@media/.test(a.at) && /html::before/.test(a.body));
+  }
+
+  /* ----- panels ----- */
+  const PAN = ".status-menu-container,.list-block,.cover-block";
+  const pr = all(PAN);
+  const p0 = pr.find(r => r.decls["background-color"]);
+  if (p0) {
+    const c = colors(p0.decls["background-color"])[0]; if (c) { o.pan = c.hex; o.po = c.a; }
+    const bf = p0.decls["backdrop-filter"] || "";
+    let m = /blur\(([\d.]+)px\)/.exec(bf); if (m) o.pb = +m[1];
+    m = /saturate\(([\d.]+)\)/.exec(bf); o.psat = m ? +m[1] : 1;
+    const rr = px(p0.decls["border-radius"]); if (rr !== null) o.rad = rr;
+    const bc = colors(p0.decls.border)[0]; if (bc) o.bor = bc.a;
+  }
+  const pbg = pr.map(r => r.decls["background-image"] || "").join(",");
+  const gm = /(^|[^\w-])linear-gradient\(\s*([\d.]+)deg\s*,\s*(rgba?\([^)]*\))\s*,\s*(rgba?\([^)]*\))/.exec(pbg);
+  o.pgrad = !!gm;
+  if (gm) { o.pang = +gm[2]; const c2 = colors(gm[4])[0]; if (c2) o.pan2 = c2.hex; }
+  o.scan = /repeating-linear-gradient/.test(pbg);
+  o.grain = /radial-gradient/.test(pbg);
+  o.outl = false;
+  pr.forEach(r => { const c = colors(r.decls.border)[0]; if (c && !(c.r === 255 && c.g === 255 && c.b === 255) && Math.abs(c.a - 0.7) < 0.001) { o.outl = true; accCand.push(c.hex); } });
+  const bv = first(".list-block,.cover-block");
+  o.bevel = !!(bv && bv.decls["border-top-color"]);
+  if (o.bevel) {
+    const t = colors(bv.decls["border-top-color"])[0], b = colors(bv.decls["border-bottom-color"])[0];
+    if (t) o.eh = t.a; if (b) o.es = b.a;
+  }
+  const lb = all(".list-block").find(r => r.decls["box-shadow"] || r.decls.animation);
+  if (lb) {
+    const bs = lb.decls["box-shadow"] || "", an = lb.decls.animation || "";
+    const sm = /0 2px 4px rgba\(0,\s*0,\s*0,\s*([\d.]+)\)/.exec(bs);
+    o.shadow = !!sm; if (sm) o.sh = +sm[1];
+    const gm2 = /0 0 18px (rgba?\([^)]*\))/.exec(bs);
+    let lo = null;
+    if (gm2) { const c = colors(gm2[1])[0]; if (c) { accCand.unshift(c.hex); lo = c.a; } }
+    o.fade = /fadeUp/.test(an);
+    const pm = /glowPulse\s+([\d.]+)s/.exec(an);
+    o.pulse = !!pm; if (pm) o.ps = +pm[1];
+    const kf = ats.find(a => /@keyframes\s+glowPulse/.test(a.at));
+    const km = kf && /0 0 34px (rgba?\([^)]*\))/.exec(kf.body);
+    if (km && colors(km[1])[0]) o.gl = colors(km[1])[0].a;
+    else if (lo !== null) o.gl = Math.round(lo / 0.375 * 100) / 100;
+  }
+
+  /* ----- category bar ----- */
+  const cbR = all(".list-unit .list-status-title");
+  const cb = cbR.find(r => r.decls.background);
+  if (cb) {
+    const cs = colors(cb.decls.background);
+    if (cs[0]) { o.h1 = cs[0].hex; o.hop = cs[0].a; } if (cs[1]) o.h2 = cs[1].hex; if (cs[2]) o.h3 = cs[2].hex;
+  }
+  const anim = cbR.map(r => r.decls.animation || "").join(",");
+  let m1 = /shimmer\s+([\d.]+)s/.exec(anim); o.shimmer = !!m1; if (m1) o.shp = +m1[1];
+  m1 = /hueSpin\s+([\d.]+)s/.exec(anim); o.rainbow = !!m1; if (m1) o.rbp = +m1[1];
+  const hhR = cbR.find(r => r.decls["padding-top"]); o.hh = hhR ? (px(hhR.decls["padding-top"]) || 0) : 0;
+
+  /* ----- text ----- */
+  const lk = first(".list-table .list-table-data .data a,.list-table .list-table-data .data .link");
+  if (lk && isHex(lk.decls.color)) o.txt = lk.decls.color.toLowerCase();
+  const dr = all(".list-table .list-table-data .data");
+  o.divs = false; o.rp = 0; o.bts = 0;
+  dr.forEach(r => {
+    const d = r.decls;
+    if (isHex(d.color)) { o.btc = d.color.toLowerCase(); const c = colors(d["text-shadow"])[0]; if (c) o.tsh = c.a; }
+    const dm = /inset 0 -1px 0 rgba\(255,\s*255,\s*255,\s*([\d.]+)\)/.exec(d["box-shadow"] || "");
+    if (dm) { o.divs = true; o.div = +dm[1]; }
+    if (d["padding-top"]) o.rp = px(d["padding-top"]) || 0;
+    if (d["font-size"]) o.bts = px(d["font-size"]) || 0;
+  });
+  const hdC = rules.find(r => r.sel.indexOf(".header-title .link.sort") > -1 && isHex(r.decls.color));
+  if (hdC) o.hdr = hdC.decls.color.toLowerCase();
+  const ct = first(".list-unit .list-status-title .text");
+  if (ct) { if (isHex(ct.decls.color)) o.ctc = ct.decls.color.toLowerCase(); const l = px(ct.decls["letter-spacing"]); if (l !== null) o.cts = l; }
+  const TAB = ".status-menu-container .status-menu .status-button";
+  const tabR = all(TAB);
+  const tc = tabR.find(r => isHex(r.decls.color)); if (tc) o.tabc = tc.decls.color.toLowerCase();
+  o.pills = tabR.some(r => /20px/.test(r.decls["border-radius"] || ""));
+  const th = rules.find(r => r.sel === TAB + ":hover," + TAB + ".on" && r.decls.background);
+  if (th) { const c = colors(th.decls.background)[0]; if (c) { o.tabhl = c.a; accCand.push(c.hex); } }
+  const lh = first("a:hover,.list-table .list-table-data .data a:hover");
+  const lhVal = lh && isHex(lh.decls.color) ? lh.decls.color.toLowerCase() : null;
+  const tt = first(".list-table .list-table-data .data.title a");
+  o.ts = 0; o.tls = 0; o.upper = false; o.neon = false;
+  if (tt) {
+    o.ts = px(tt.decls["font-size"]) || 0; o.tls = px(tt.decls["letter-spacing"]) || 0;
+    o.upper = /uppercase/.test(tt.decls["text-transform"] || "");
+    o.neon = !!tt.decls["text-shadow"];
+    if (o.neon) { const c = /0 0 6px (#[0-9a-f]{6})/i.exec(tt.decls["text-shadow"]); if (c) accCand.push(c[1].toLowerCase()); }
+  }
+  const hh2 = first(".list-table .list-table-header .header-title,.list-table .list-table-header .header-title a");
+  o.hts = 0; o.uph = false;
+  if (hh2) { o.hts = px(hh2.decls["font-size"]) || 0; o.uph = /uppercase/.test(hh2.decls["text-transform"] || ""); }
+
+  /* ----- rows ----- */
+  o.zebra = rules.some(r => /tbody:nth-of-type\(even\):not\(:hover\)/.test(r.sel));
+  const tr = rules.find(r => r.sel.indexOf(":has(.score-label.score-9)") > -1);
+  o.tint = !!tr;
+  if (tr) { const c = colors(tr.decls["background-color"])[0]; if (c) o.tinta = c.a; }
+  o.focus = !!first(".list-table:hover tbody:not(:hover)");
+  const sb = first(".list-table .list-table-data .data.status");
+  o.sbar = !!sb;
+  if (sb) {
+    if (isHex(sb.decls["background-color"])) o.sbc = sb.decls["background-color"].toLowerCase();
+    const w = px(sb.decls.width); if (w !== null) o.sbw = w;
+    const sgm = /0 0 ([\d.]+)px/.exec(sb.decls["box-shadow"] || ""); o.sbg = sgm ? +sgm[1] : 0;
+  }
+  const HDR = ".list-table .list-table-header .header-title";
+  const hr = all(HDR).find(r => r.decls["background-color"] || r.decls.position);
+  o.sticky = !!(hr && /sticky/.test(hr.decls.position || "")); o.hbg = false;
+  if (hr && hr.decls["background-color"]) {
+    const c = colors(hr.decls["background-color"])[0], P = o.pan ? o.pan : null;
+    const stickyOnly = o.sticky && c && Math.abs(c.a - 0.92) < 0.001 && P && c.hex === P;
+    if (c && !stickyOnly) { o.hbg = true; o.hbgc = c.hex; o.hbgo = c.a; }
+  }
+  const hd = rules.find(r => r.sel.indexOf(".header-title:not(.status) ~ .header-title") > -1);
+  o.hdiv = !!hd;
+  if (hd) { const c = colors(hd.decls["border-left"])[0]; if (c) o.hdv = c.a; }
+  const hv = first(".list-table tbody:hover");
+  if (hv) {
+    const tm = /translateX\((-?[\d.]+)px\)\s*translateY\(-?([\d.]+)px\)/.exec(hv.decls.transform || "");
+    if (tm) { o.slide = +tm[1]; o.lift = +tm[2]; }
+    const bm = /^inset 4px 0 0 (#[0-9a-f]{6})/i.exec(hv.decls["box-shadow"] || "");
+    o.bar = !!bm; if (bm) accCand.push(bm[1].toLowerCase());
+  }
+  const hbgR = rules.find(r => r.sel.indexOf('list-item"]:hover') > -1 && r.decls["background-color"]);
+  if (hbgR) {
+    const c = colors(hbgR.decls["background-color"])[0];
+    if (c) { if (c.r === 0 && c.g === 0 && c.b === 0) { o.hov = c.a; o.hovacc = false; } else { o.hovacc = true; o.hov = Math.round(c.a / 0.6 * 100) / 100; accCand.push(c.hex); } }
+  }
+  const sw = first(".list-table > tbody:hover");
+  o.sweep = !!(sw && /linear-gradient/.test(sw.decls["background-image"] || ""));
+  if (o.sweep) { const m = /rgba\(255,\s*255,\s*255,\s*([\d.]+)\)/.exec(sw.decls["background-image"]); if (m) o.swi = +m[1]; }
+
+  /* ----- covers ----- */
+  const ci = first(".list-table .list-table-data .data.image img");
+  o.csz = 0; o.cglow = 0; o.cbord = false; o.gray = false; o.cbr = 1;
+  if (ci) {
+    const d = ci.decls, rr = px(d["border-radius"]); if (rr !== null) o.crad = rr;
+    const bs = d["box-shadow"] || "";
+    const sm = /0 6px 18px rgba\(0,\s*0,\s*0,\s*([\d.]+)\)/.exec(bs); if (sm) o.cs = +sm[1];
+    const gm3 = /0 0 16px (rgba?\([^)]*\))/.exec(bs);
+    if (gm3 && colors(gm3[1])[0]) { o.cglow = colors(gm3[1])[0].a; accCand.push(colors(gm3[1])[0].hex); }
+    const f = d.filter || "";
+    o.gray = /grayscale\(1\)/.test(f);
+    const bm = /brightness\(([\d.]+)\)/.exec(f); if (bm) o.cbr = +bm[1];
+    if (d.width) o.csz = px(d.width) || 0;
+    if (d.border) {
+      const m = /([\d.]+)px solid (#[0-9a-f]{6})/i.exec(d.border);
+      if (m) { o.cbord = true; o.cbw = +m[1]; o.cbc = m[2].toLowerCase(); }
+    }
+  }
+  const ti = first(".list-table tbody:hover .list-table-data .data.image img");
+  const tm2 = ti && /scale\(([\d.]+)\)\s*rotate\((-?)([\d.]+)deg\)/.exec(ti.decls.transform || "");
+  o.tilt = !!tm2; o.alt = false;
+  if (tm2) { o.sc = +tm2[1]; o.rot = +tm2[3]; o.alt = tm2[2] === "-"; }
+
+  /* ----- scores ----- */
+  const sc = [];
+  for (let i = 1; i <= 10; i++) { const r = first(".score-label.score-" + i); sc.push(r && isHex(r.decls.color) ? r.decls.color.toLowerCase() : null); }
+  o.scores = sc.every(Boolean);
+  if (o.scores) {
+    const key = Object.keys(PALETTES).find(k => PALETTES[k].every((c, i) => c.toLowerCase() === sc[i]));
+    if (key) o.pal = key; else o.pal = "Accent shades";
+  }
+  const s10 = all(".score-label.score-10").find(r => r.decls["text-shadow"]);
+  o.glow10 = !!s10;
+  if (s10 && !o.scores) {
+    const gc = colors(s10.decls["text-shadow"])[0];
+    if (gc) { const key = Object.keys(PALETTES).find(k => PALETTES[k][9].toLowerCase() === gc.hex); o.pal = key || "Accent shades"; }
+  }
+  o.sglow = false; o.spill = false; o.ssz = 0;
+  all(".score-label").forEach(r => {
+    if (/currentcolor/i.test(r.decls["text-shadow"] || "")) o.sglow = true;
+    if (r.decls["border-radius"]) o.spill = true;
+    if (r.decls["font-size"]) o.ssz = px(r.decls["font-size"]) || 0;
+  });
+
+  /* ----- hidden columns ----- */
+  Object.assign(o, { hNum: false, hImg: false, hType: false, hProg: false, hPrem: false, hMal: false, hEdit: false });
+  rules.forEach(r => {
+    if (!/none/.test(r.decls.display || "")) return;
+    const s = "," + r.sel + ",";
+    if (/\.data\.number,/.test(s)) o.hNum = true;
+    if (/\.data\.image,/.test(s)) o.hImg = true;
+    if (/\.data\.type,/.test(s)) o.hType = true;
+    if (/\.data\.progress,/.test(s)) o.hProg = true;
+    if (/\.data\.release,/.test(s)) o.hPrem = true;
+    if (/\.data\.mal,/.test(s)) o.hMal = true;
+    if (/\.data\.title \.edit,/.test(s)) o.hEdit = true;
+  });
+
+  /* ----- extras ----- */
+  const sbr = first("html");
+  o.scroll = !!(sbr && sbr.decls["scrollbar-color"]);
+  if (o.scroll) { const m = /^(#[0-9a-f]{6})/i.exec(sbr.decls["scrollbar-color"]); if (m) accCand.push(m[1].toLowerCase()); }
+  o.sel = rules.some(r => /::selection$/.test(r.sel));
+
+  /* ----- accent color (shared by many effects) ----- */
+  const acc = accCand.find(isHex);
+  if (acc) o.acc = acc.toLowerCase();
+  if (lhVal) { o.lhcol = lhVal; o.lhc = lhVal !== mix(o.acc || "#40e0d0", 0.45); } else o.lhc = false;
+  if (o.scores && o.pal === "Accent shades" && !acc) delete o.pal;
+
+  return o;
+}
+
+/* ---------- Browser part ---------- */
+if (typeof document !== "undefined") {
+  const defaults = {}, state = {}, ITEMS = {};
+  SCHEMA.forEach(g => g.i.forEach(it => { defaults[it[0]] = it[it.length - 1]; ITEMS[it[0]] = it; }));
+  Object.assign(state, defaults);
+
+  const $ = id => document.getElementById(id);
+  let uploaded = "";
+
+  /* render the preview as a full-size page (like MAL) and scale it to fit the window */
+  const VW = 1500;
+  function fit() {
+    const wrap = $("stagewrap"), st = $("stage");
+    const k = Math.min(1, wrap.clientWidth / VW) || 1;
+    const H = Math.max(360, Math.min(window.innerHeight - 130, 820));
+    wrap.style.height = H + "px";
+    st.style.width = VW + "px";
+    st.style.height = (H / k) + "px";
+    st.style.transform = "scale(" + k + ")";
+  }
+  window.addEventListener("resize", fit);
+
+  function refresh() {
+    $("code").textContent = "/* MAL CSS Builder: paste into your MyAnimeList style box */\n" + build(state);
+    const ps = state;
+    $("gen").textContent = build(ps, { body: ".stage", pos: "absolute", att: "scroll" });
+    fit();
+    $("stage").style.backgroundImage = uploaded ? `url("${uploaded}")` : "";
+    $("stage").classList.toggle("has-bg", !!(uploaded || state.bg));
+  }
+
+  /* keep only known keys with sane values  */
+  function sanitize(obj) {
+    const out = {};
+    if (!obj || typeof obj !== "object") return out;
+    Object.keys(obj).forEach(k => {
+      const it = ITEMS[k]; if (!it) return;
+      const t = it[1], v = obj[k];
+      if (t === "range") { const x = parseFloat(v); if (isFinite(x)) out[k] = Math.min(it[4], Math.max(it[3], x)); }
+      else if (t === "check") out[k] = v === true || v === "true";
+      else if (t === "color") { if (/^#[0-9a-f]{6}$/i.test(v)) out[k] = String(v).toLowerCase(); }
+      else if (t === "select") { if (it[3].indexOf(v) > -1) out[k] = v; }
+      else if (t === "text") out[k] = String(v).replace(/[\r\n\\]/g, "").slice(0, 2000);
+    });
+    return out;
+  }
+
+  function syncUI() {
+    SCHEMA.forEach(g => g.i.forEach(it => {
+      const k = it[0], t = it[1], el = $("i_" + k), v = state[k];
+      if (!el) return;
+      if (t === "check") el.checked = !!v; else el.value = v;
+      if (t === "range") $("v_" + k).textContent = n(v);
+    }));
+  }
+
+  function setState(obj, reset) {
+    if (reset) Object.assign(state, defaults);
+    Object.assign(state, sanitize(obj));
+    syncUI();
+    refresh();
+  }
+
+  /* ----- controls ----- */
+  const host = $("controls");
+  { const box = document.createElement("details");
+    box.className = "group imp";
+    box.innerHTML = `<summary>Import existing CSS</summary><div class="gbody"><div class="ctl" style="margin-bottom:0">Paste CSS you made with this builder, then press Confirm. The sliders and checkboxes will update to match it.</div><textarea id="impText" spellcheck="false" placeholder="Paste your CSS text here"></textarea><div class="btns"><button type="button" id="impApply">Confirm</button><button type="button" id="impClear" class="ghost">Clear</button></div><div class="impmsg" id="impMsg"></div></div>`;
+    host.appendChild(box);
+    $("impApply").addEventListener("click", () => {
+      const txt = $("impText").value;
+      if (!/\.list-block|\.list-table|\.score-label|\.status-menu/.test(txt)) { $("impMsg").textContent = "I couldn't find any list settings in that text. Paste the full CSS from this builder."; return; }
+      const got = parseCss(txt);
+      setState(got, true);
+      $("impMsg").textContent = "Done. " + Object.keys(got).length + " settings applied. Anything the text doesn't mention was reset to its default.";
+    });
+    $("impClear").addEventListener("click", () => { $("impText").value = ""; $("impMsg").textContent = ""; });
+  }
+  SCHEMA.forEach(g => {
+    const box = document.createElement("details");
+    box.className = "group";
+    if (g.open) box.open = true;
+    box.innerHTML = `<summary>${g.g}</summary>`;
+    const body = document.createElement("div");
+    body.className = "gbody";
+    g.i.forEach(it => {
+      const [k, t, label] = it, d = it[it.length - 1];
+      const row = document.createElement("div");
+      row.className = "ctl " + t;
+      if (t === "range") row.innerHTML = `<label>${label}<span id="v_${k}">${d}</span></label><input type="range" id="i_${k}" min="${it[3]}" max="${it[4]}" step="${it[5]}" value="${d}">`;
+      if (t === "color") row.innerHTML = `<label for="i_${k}">${label}</label><input type="color" id="i_${k}" value="${d}">`;
+      if (t === "check") row.innerHTML = `<label><input type="checkbox" id="i_${k}" ${d ? "checked" : ""}> ${label}</label>`;
+      if (t === "select") row.innerHTML = `<label for="i_${k}">${label}</label><select id="i_${k}">${it[3].map(o => `<option${o === d ? " selected" : ""}>${o}</option>`).join("")}</select>`;
+      if (t === "text") row.innerHTML = `<label for="i_${k}">${label}</label><input type="text" id="i_${k}" placeholder="https://..." value="${d}">`;
+      row.querySelector("input,select").addEventListener("input", e => {
+        const el = e.target;
+        state[k] = t === "range" ? parseFloat(el.value) : t === "check" ? el.checked : el.value.trim();
+        if (t === "range") $("v_" + k).textContent = n(state[k]);
+        refresh();
+      });
+      body.appendChild(row);
+    });
+    box.appendChild(body);
+    host.appendChild(box);
+  });
+
+  /* ----- sample list ----- */
+  const covers = [["#7a2b1f","#1b1b1b"],["#1a1a1a","#8a5a3a"],["#d98ab0","#3a2a7a"],["#2b4a73","#c9d3e6"],["#2a7a3a","#d9a321"],["#3b2a7a","#c43a3a"],["#1f6f8b","#99e2b4"],["#8a1c1c","#2b2b2b"],["#e0a030","#5a2a7a"]];
+  const art = c => "data:image/svg+xml," + encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='76' height='108'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='${c[0]}'/><stop offset='1' stop-color='${c[1]}'/></linearGradient></defs><rect width='76' height='108' fill='url(#g)'/></svg>`);
+  const rows = [["Cowboy Bebop",10,"TV","26","Spring 1998","8.75"],["Grave of the Fireflies",10,"Movie","1","Spring 1988","8.46"],["Clannad: After Story",9,"TV","24","Fall 2008","8.91"],["Steins;Gate",8,"TV","24","Spring 2011","9.07"],["Hunter x Hunter",7,"TV","148","Fall 2011","9.03"],["Made in Abyss",4,"TV","13","Summer 2017","8.71"],["Fullmetal Alchemist: Brotherhood",9,"TV","64","Spring 2009","9.10"],["Death Note",8,"TV","37","Fall 2006","8.62"],["Mob Psycho 100",9,"TV","12","Summer 2016","8.48"]];
+  $("table").innerHTML =
+    `<thead><tr class="list-table-header"><td class="header-title status"></td><td class="header-title number"><a class="link">#</a></td><td class="header-title image"><a class="link sort">Image</a></td><td class="header-title title"><a class="link sort">Anime Title</a></td><td class="header-title score"><a class="link sort">Score</a></td><td class="header-title type"><a class="link sort">Type</a></td><td class="header-title progress"><a class="link sort">Progress</a></td><td class="header-title release"><a class="link sort">Premiered</a></td><td class="header-title mal"><a class="link sort">MAL Score</a></td></tr></thead>` +
+    rows.map((r, i) => `<tbody class="list-item"><tr class="list-table-data"><td class="data status completed"></td><td class="data number">${i+1}</td><td class="data image"><a><img src="${art(covers[i])}" alt=""></a></td><td class="data title"><div class="title-wrap"><a class="link">${r[0]}</a><span class="edit">Edit - More</span></div></td><td class="data score"><span class="score-label score-${r[1]}">${r[1]}</span></td><td class="data type">${r[2]}</td><td class="data progress">${r[3]}</td><td class="data release">${r[4]}</td><td class="data mal">${r[5]}</td></tr></tbody>`).join("");
+
+  /* ----- buttons ----- */
+  function copyText(txt, b, label) {
+    const done = () => { b.textContent = "Copied"; setTimeout(() => b.textContent = label, 1200); };
+    const fb = () => { const t = document.createElement("textarea"); t.value = txt; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); done(); };
+    try { navigator.clipboard.writeText(txt).then(done, fb); } catch (x) { fb(); }
+  }
+
+  $("bgfile").addEventListener("change", e => {
+    const f = e.target.files[0]; if (!f) return;
+    const rd = new FileReader(); rd.onload = () => { uploaded = rd.result; refresh(); }; rd.readAsDataURL(f);
+  });
+  $("copy").addEventListener("click", e => copyText($("code").textContent, e.target, "Copy CSS"));
+  $("download").addEventListener("click", () => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([$("code").textContent], { type: "text/css" }));
+    a.download = "mal-style.css"; a.click();
+  });
+  $("reset").addEventListener("click", () => {
+    uploaded = ""; $("bgfile").value = "";
+    setState({}, true);
+  });
+
+  refresh();
+}
+
+if (typeof module !== "undefined") module.exports = { build, SCHEMA, parseCss, PALETTES };
+  </script>
+</body>
+</html>
